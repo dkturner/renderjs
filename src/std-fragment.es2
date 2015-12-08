@@ -1,0 +1,21 @@
+precision highp float;
+
+uniform sampler2D uSampler0;
+uniform bool uWireframe;
+uniform mat4 uViewportMatrix;
+
+varying lowp vec4 vColor;
+varying highp vec2 vTextureCoord;
+varying highp float vNormalizedDepth;
+
+void main(void) {
+    if (!gl_FrontFacing)
+        discard;
+    if (uWireframe) {
+        float depthRep = log(vNormalizedDepth * (exp(1.0) - 1.0) + 1.0);
+        depthRep = log(depthRep * (exp(1.0) - 1.0) + 1.0);
+        gl_FragColor = vec4(vColor.rgb, depthRep);
+    } else {
+        gl_FragColor = texture2D(uSampler0, vec2(vTextureCoord.s, vTextureCoord.t));
+    }
+}

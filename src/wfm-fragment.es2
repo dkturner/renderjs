@@ -1,0 +1,54 @@
+#extension GL_EXT_frag_depth : enable
+precision highp float;
+
+uniform sampler2D uSampler0;
+uniform vec2 uViewportSize;
+uniform mat4 uPerspective;
+
+varying vec2 vTextureCoord;
+
+void main(void) {
+    vec4 pix = texture2D(uSampler0, vTextureCoord);
+    if (pix.a == 0.0) {
+        discard;
+    } else {
+        vec2 onePixel = vec2(1.0, 1.0) / uViewportSize;
+        vec4 edge = (8.*pix -
+            texture2D(uSampler0, vTextureCoord + vec2(-onePixel.x, -onePixel.y)) -
+            texture2D(uSampler0, vTextureCoord + vec2(-onePixel.x, 0)) -
+            texture2D(uSampler0, vTextureCoord + vec2(-onePixel.x, onePixel.y)) -
+            texture2D(uSampler0, vTextureCoord + vec2(0, -onePixel.y)) -
+            texture2D(uSampler0, vTextureCoord + vec2(0, onePixel.y)) -
+            texture2D(uSampler0, vTextureCoord + vec2(onePixel.x, -onePixel.y)) -
+            texture2D(uSampler0, vTextureCoord + vec2(onePixel.x, 0)) -
+            texture2D(uSampler0, vTextureCoord + vec2(onePixel.x, onePixel.y)))/8. ;
+        float edginess = edge.r*edge.r + edge.g*edge.g + edge.b*edge.b;
+        if (edginess > 0.01) {
+            gl_FragColor = vec4(1,1,1,1);
+        } else {
+            float y = 0.1+pix.a-0.2*(pix.b-0.5)*(pix.b-0.5);
+            float u = 0.08*(pix.r-0.5)*(pix.r-0.5);
+            float v = 0.12*(pix.g-0.5)*(pix.g-0.5);
+            gl_FragColor=vec4(y,y+u,y+v,0.5);
+        }
+#ifdef GL_EXT_frag_depth
+        float depthRep = pix.a;
+        float normalizedDepth = (exp(depthRep) - 1.0)/(exp(1.0) - 1.0);
+        normalizedDepth = (exp(normalizedDepth) - 1.0)/(exp(1.0) - 1.0);
+        vec4 f_ = vec4(0,0,1,-1)*uPerspective;
+        vec4 n_ = vec4(0,0,1,1)*uPerspective;
+        float np = n_.w/n_.z;
+        float fp = f_.w/f_.z;
+        float camNear = n_.w/n_.z;
+        float camFar = f_.w/f_.z;
+        //vNormalizedDepth = (cameraSpace.z + camNear) / (camNear - camFar);
+        float cameraZ = normalizedDepth * (camNear - camFar) - camNear;
+        vec4 clipZ = (uPerspective * vec4(0, 0, cameraZ, 1));
+        float ndc_depth = clipZ.z / clipZ.w;
+        float far = gl_DepthRange.far;
+        float near = gl_DepthRange.near;
+        gl_FragDepthEXT = (((far - near) * ndc_depth) + near + far) / 2.0;
+#endif
+        //gl_FragColor = vec4(dv.z, 0,0,1);
+    }
+}
