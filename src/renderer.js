@@ -92,13 +92,23 @@ function Renderer(gl, width, height, resources) {
         }
     }
 
+    function drawTriangleElements(mesh, program) {
+        program.vertexPosition = mesh.vertexBuffer;
+        program.vertexNormal = mesh.normalBuffer;
+        program.textureCoord = mesh.texCoords;
+        if (mesh.texture) {
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
+        }
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.faceBuffer);
+        gl.drawElements(gl.TRIANGLES, mesh.faceCount, gl.UNSIGNED_SHORT, 0);
+    }
+
     function createRenderData(node) {
         var result = {};
         if (node.mesh) {
-            var vertexBuffer = unpackBuffer(node.mesh.vertices, 3);
-            result.mesh = {
-                vertexBuffer: vertexBuffer
-            };
+            result.mesh = {};
+            result.mesh.vertexBuffer = unpackBuffer(node.mesh.vertices, 3);
             if (node.mesh.texture) {
                 result.mesh.texture = loadingTexture;
                 resources.texture(node.mesh.texture).then (function (texture) {
@@ -115,20 +125,9 @@ function Renderer(gl, width, height, resources) {
             if (node.mesh.mode == 'strip') {
                 throw {error: 'mesh mode not supported', reason: node.mesh.mode};
             } else if (node.mesh.faces) {
-                var len = 3 * node.mesh.faces.length;
-                var faceBuffer = unpackBuffer(node.mesh.faces, 3, gl.UNSIGNED_SHORT, gl.ELEMENT_ARRAY_BUFFER);
-                result.mesh.faceBuffer = faceBuffer;
-                result.mesh.draw = function (program) {
-                    currentProgram.vertexPosition = this.vertexBuffer;
-                    currentProgram.vertexNormal = this.normalBuffer;
-                    currentProgram.textureCoord = this.texCoords;
-                    if (this.texture) {
-                        gl.activeTexture(gl.TEXTURE0);
-                        gl.bindTexture(gl.TEXTURE_2D, this.texture);
-                    }
-                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, faceBuffer);
-                    gl.drawElements(gl.TRIANGLES, len, gl.UNSIGNED_SHORT, 0);
-                }
+                result.mesh.faceBuffer = unpackBuffer(node.mesh.faces, 3, gl.UNSIGNED_SHORT, gl.ELEMENT_ARRAY_BUFFER);
+                result.mesh.faceCount = 3 * node.mesh.faces.length;
+                result.mesh.draw = drawTriangleElements;
             } else {
                 // TODO: drawArray
             }
@@ -144,7 +143,7 @@ function Renderer(gl, width, height, resources) {
                 result.transform = fn;
             }
         }
-        nodeRender[node] = result;
+        node.__renderData = result;
         if (node.children) {
             for (var i = 0; i < node.children.length; ++ i)
                 createRenderData(node.children[i]);
@@ -153,12 +152,12 @@ function Renderer(gl, width, height, resources) {
     }
 
     function releaseRenderData(node) {
-        var data = nodeRender[node];
+        var data = node.__renderData;
         if (data) {
             if (data.mesh) {
                 gl.deleteBuffer(data.mesh.vertexBuffer);
+                // TODO!!
             }
-            delete nodeRender[node];
         }
         if (node.children) {
             for (var i = 0; i < node.children.length; ++ i)
@@ -192,7 +191,7 @@ function Renderer(gl, width, height, resources) {
     }
 
     function renderNode(program, node, time) {
-        var data = nodeRender[node] || createRenderData(node);
+        var data = node.__renderData || createRenderData(node);
         if (data.transform) {
             model.push();
             data.transform(model);
@@ -201,7 +200,7 @@ function Renderer(gl, width, height, resources) {
             program.modelMatrix = model;
             if (program.flags.wireframe)
                 beginWireframe();
-            data.mesh.draw(program);
+            data.mesh.draw(data.mesh, program);
             if (program.flags.wireframe)
                 endWireframe();
         }
@@ -338,7 +337,6 @@ function Renderer(gl, width, height, resources) {
     var running;
     var sysTime0, renderTime0;
     var nodes = [];
-    var nodeRender = {};
     var textures = {};
     var renderFlags = {};
     var pendingResources = [];
@@ -388,8 +386,8 @@ function Renderer(gl, width, height, resources) {
     });
 
     preprocessed = createFramebuffer();
-    viewport.perspective(90, +width/+height, 1, 100);
-    camera.translate(0, 0, -2);
+    viewport.perspective(60, +width/+height, 1, 100);
+    camera.translate(0, 0, -5);
 
     // Public interface
     this.time = 0; // in seconds

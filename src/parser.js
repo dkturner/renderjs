@@ -124,7 +124,12 @@ function Parser() {
             var fn = parser.builtins[tree.name];
             if (!fn)
                 throw {error: 'unknown function ' + tree.name};
-            return function () { fn.apply(this, tree.args.map(function(a) { return a(); })); };
+            var args = tree.args.map(emit);
+            return function () {
+                return fn.apply(this, args.map(function(a) {
+                    return a();
+                }));
+            };
         }
         if (tree.op == 'lookup') {
             var value = parser.resolve(tree.name);
