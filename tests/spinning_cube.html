@@ -21,6 +21,7 @@ canvas {
 </head>
 <body>
     <canvas></canvas>
+    <div id="fps" style="position:absolute; top:0; right: 0; width: 60px; padding: 5px; color: white; text-align: right"></div>
     <script type="text/javascript" src="../lib/jquery-2.1.4.min.js"></script>
     <script type="text/javascript" src="../dist/renderjs-0.1.js"></script>
     <script type="text/javascript">
@@ -30,12 +31,25 @@ canvas.height = $('body').height();
 window.createRenderer(canvas).then(function (renderer) {
     var cube = Primitives.cube();
     cube.mesh.texture = 'cubetexture.png';
-    cube.transforms = [{
-        rotate: [30, 1, 0, 0],
-        rotate: ['$time/30', 0, 1, 0]
-    }];
+    cube.transform = [
+        ['rotate', 30, 1, 0, 0],
+        ['rotate', '$time * 0.25 * 360', 0, 1, 0]
+    ];
     renderer.addNode(cube);
     renderer.resources.onresourcesloaded = renderer.start;
+
+    // FPS display
+    var lastFrameCount = 0;
+    var lastTime = new Date().getTime();
+    setInterval(function () {
+        var frames = renderer.frameCount - lastFrameCount;
+        lastFrameCount = renderer.frameCount;
+        var time = new Date().getTime();
+        var elapsed = time - lastTime;
+        lastTime = time;
+        var fps = frames * 1000.0 / elapsed;
+        $('#fps').text(fps.toFixed(1)+' fps');
+    }, 1000);
 });
 
     </script>

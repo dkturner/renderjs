@@ -6,11 +6,17 @@ function Renderer(gl, width, height, resources) {
     function render(time) {
         if (!running)
             return;
+        if (sysTime0 == undefined) {
+            sysTime0 = time;
+            renderTime0 = renderer.time;
+        }
+        renderer.time = (time - sysTime0) / 1000 + renderTime0;
         model.identity();
         currentProgram.cameraMatrix = camera;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         for (var i = 0; i < nodes.length; ++ i)
             renderNode(currentProgram, nodes[i], time);
+        renderer.frameCount++;
 
         requestAnimationFrame(render);
     }
@@ -31,6 +37,59 @@ function Renderer(gl, width, height, resources) {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         for (var i = 0; i < nodes.length; ++ i)
             renderNode(currentProgram, nodes[i], time);
+        renderer.frameCount++;
+    }
+
+    function createEvaluator(fArg) {
+        if (typeof fArg == 'number')
+            return function () { return fArg; };
+        return Parser.createEvaluator(fArg, function (parameter) {
+            if (parameter == '$time')
+                return function () { return renderer.time; };
+            return function () {
+                var param = renderer.parameters[parameter];
+                if (typeof param == 'function')
+                    return param(renderer.time);
+                if (typeof param == 'number')
+                    return param;
+                return 0.0;
+            }
+        })
+    }
+
+    function compose(f1, f2) {
+        return function () {
+            f1.apply(this, arguments);
+            f2.apply(this, arguments);
+        };
+    }
+
+    function createTransformFunction(transform) {
+        if (transform[0] == 'rotate') {
+            var angle = createEvaluator(transform[1]);
+            var x = createEvaluator(transform[2]);
+            var y = createEvaluator(transform[3]);
+            var z = createEvaluator(transform[4]);
+            return function (matrix) {
+                matrix.rotate(angle(), [x(), y(), z()]);
+            }
+        } else if (transform[0] == 'translate') {
+            var x = createEvaluator(transform[1]);
+            var y = createEvaluator(transform[2]);
+            var z = createEvaluator(transform[3]);
+            return function (matrix) {
+                matrix.translate(x(), y(), z());
+            }
+        } else if (transform[0] == 'scale') {
+            var x = createEvaluator(transform[1]);
+            var y = createEvaluator(transform[2]);
+            var z = createEvaluator(transform[3]);
+            return function (matrix) {
+                matrix.scale(x(), y(), z());
+            }
+        } else {
+            throw {error:'unsupported transform', reason: transform};
+        }
     }
 
     function createRenderData(node) {
@@ -72,6 +131,17 @@ function Renderer(gl, width, height, resources) {
                 }
             } else {
                 // TODO: drawArray
+            }
+            if (node.transform) {
+                var fn = undefined;
+                for (var i = 0; i < node.transform.length; ++ i) {
+                    var fn2 = createTransformFunction(node.transform[i]);
+                    if (fn)
+                        fn = compose(fn, fn2);
+                    else
+                        fn = fn2;
+                }
+                result.transform = fn;
             }
         }
         nodeRender[node] = result;
@@ -123,6 +193,10 @@ function Renderer(gl, width, height, resources) {
 
     function renderNode(program, node, time) {
         var data = nodeRender[node] || createRenderData(node);
+        if (data.transform) {
+            model.push();
+            data.transform(model);
+        }
         if (data.mesh) {
             program.modelMatrix = model;
             if (program.flags.wireframe)
@@ -136,6 +210,8 @@ function Renderer(gl, width, height, resources) {
                 renderNode(node.children[i]);
             }
         }
+        if (data.transform)
+            model.pop();
     }
 
     function unpackBuffer(buffer, size, type, target) {
@@ -260,6 +336,7 @@ function Renderer(gl, width, height, resources) {
     this.gl = gl;
     this.resources = resources;
     var running;
+    var sysTime0, renderTime0;
     var nodes = [];
     var nodeRender = {};
     var textures = {};
@@ -315,10 +392,14 @@ function Renderer(gl, width, height, resources) {
     camera.translate(0, 0, -2);
 
     // Public interface
+    this.time = 0; // in seconds
+    this.parameters = {};
+    this.frameCount = 0;
     this.start = function () {
         ready.then(function() {
             prepareRender();
             running = true;
+            sysTime0 = undefined;
             requestAnimationFrame(render);
         }, orThrowError);
     }

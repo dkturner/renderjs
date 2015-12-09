@@ -24,7 +24,7 @@ function makeOperators() {
         ['+', '-',                                     { precedence: 13, assoc: 'ltr' }],
         ['<<', '>>', '>>>',                            { precedence: 12, assoc: 'ltr' }],
         ['<', '<=', '>', '>=', 'in', 'instanceof',     { precedence: 11, assoc: 'ltr' }],
-        ['==', '!=', '===', '!===',                    { precedence: 10, assoc: 'ltr' }],
+        ['==', '!=', '===', '!==',                     { precedence: 10, assoc: 'ltr' }],
         ['&',                                          { precedence:  9, assoc: 'ltr' }],
         ['^',                                          { precedence:  8, assoc: 'ltr' }],
         ['|',                                          { precedence:  7, assoc: 'ltr' }],
@@ -58,8 +58,8 @@ function LexicalScope() {
         scope = newScope;
     }
     this.pop = function () {
-        for (var k in scope.vars)
-            anonNameCount--;
+        //for (var k in scope.vars)
+        //    anonNameCount--;
         scope = scope.parent;
     }
     this.lookup = function (varName) {
@@ -248,9 +248,13 @@ function minify(source, output, options) {
         }
         this.AssignmentExpression = function (node) {
             pushOperator(node.operator);
+            if (requireBrackets())
+                output('(');
             this.visit(node.left);
             output(node.operator);
             this.visit(node.right);
+            if (requireBrackets())
+                output(')');
             popOperator();
         }
         this.MemberExpression = function (node) {
@@ -441,6 +445,36 @@ function minify(source, output, options) {
             output(')');
             this.visit(node.body);
         }
+        this.WhileStatement = function (node) {
+            output('while(');
+            this.visit(node.test);
+            output(')');
+            this.visit(node.body);
+        }
+        this.SwitchStatement = function (node) {
+            output('switch(');
+            this.visit(node.discriminant);
+            output('){');
+            pushBlock();
+            for (var i = 0; i < node.cases.length; ++ i)
+                scanLexicals(node.cases[i].consequent);
+            for (var i = 0; i < node.cases.length; ++ i) {
+                if (node.cases[i].test) {
+                    output('case ');
+                    this.visit(node.cases[i].test);
+                } else {
+                    output('default');
+                }
+                output(':');
+                for (var j = 0; j < node.cases[i].consequent.length; ++ j)
+                    this.visit(node.cases[i].consequent[j]);
+            }
+            popBlock();
+            output('}');
+        }
+        this.BreakStatement = function (node) {
+            output('break;');
+        }
         this.ConditionalExpression = function (node) {
             pushOperator('?:');
             if (requireBrackets())
@@ -486,7 +520,10 @@ function minify(source, output, options) {
                     }
                 }
                 if (argumentsMatchParameters) {
+                    scanLexicals(node.callee.body.body);
+                    contextStack.push(node.callee.body.type);
                     this.traverseBody(node.callee.body);
+                    contextStack.pop();
                     return;
                 }
             }
@@ -650,9 +687,10 @@ if (typeof window == 'undefined') {
     var path = './src/';
     var sources = [
         'matrix.js',
-        'primitives.js',
+        'parser.js',
         'shader.js',
         'renderer.js',
+        'primitives.js',
     ];
 
     compile(sources, path).then(function (output) {
