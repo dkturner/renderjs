@@ -7,21 +7,8 @@ function Renderer(gl, width, height, resources) {
         if (!running)
             return;
         model.identity();
-        model.rotate(time/30, [0,1,0]);
-        model.rotate(30, [1,0,0]);
-        model.translate(-0.5,-0.5,-0.5);
-        currentProgram.flags.wireframe = true;
         currentProgram.cameraMatrix = camera;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        for (var i = 0; i < nodes.length; ++ i)
-            renderNode(currentProgram, nodes[i], time);
-
-        model.identity();
-        model.rotate(-time/30, [0,1,0]);
-        model.rotate(-15, [1,0,0]);
-        model.translate(-0.5,-0.5,-0.5);
-        currentProgram.flags.wireframe = true;
-        currentProgram.cameraMatrix = camera;
         for (var i = 0; i < nodes.length; ++ i)
             renderNode(currentProgram, nodes[i], time);
 
@@ -357,7 +344,7 @@ function Renderer(gl, width, height, resources) {
 }
 
 function combinePath(base, path) {
-    if (path.substring(0, 1) == '/' || path.indexOf('://') >= 0)
+    if (path.substring(0, 1) == '/' || path.indexOf('://') >= 0 || path.substring(0, 5) == 'data:')
         return path;
     if (base.length > 0 && base.substring(base.length - 1, 0) != '/')
         return base + '/' + path;
@@ -399,6 +386,9 @@ function Resources(resourcePath) {
                     }
                 }
             });
+        };
+        this[type].set = function (src, data) {
+            cache[src] = data;
         }
     }
     this.all = function (resourceMap) {
@@ -440,14 +430,18 @@ function Resources(resourcePath) {
 
 window.createRenderer = function (canvas, resourcePath) {
     return new Promise(function (resolve, reject) {
-        var gl = arena.getContext('webgl') || arena.getContext('experimental-webgl');
+        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         if (!gl)
             return reject('no webgl');
         var resources = new Resources(resourcePath);
+        // the comment below is used by the build system
+        //!EMBED resources: loadingtexture.jpg, std-vertex.es2, std-fragment.es2, wfm-vertex.es2, wfm-fragment.es2
         resources.all({
             'loadingtexture.jpg': resources.image,
             'std-vertex.es2': resources.file,
             'std-fragment.es2': resources.file,
+            'wfm-vertex.es2': resources.file,
+            'wfm-fragment.es2': resources.file,
         }).then(function(preloaded) {
             try {
                 var renderer = new Renderer(gl, canvas.width, canvas.height, resources);
