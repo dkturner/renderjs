@@ -1,6 +1,6 @@
 'use strict';
 
-(function (window) {
+var Shader = (function () {
 
 function Shader(gl, vertexProgram, fragmentProgram) {
     function makeUniformName(name, prefix) {
@@ -109,6 +109,6 @@ function Shader(gl, vertexProgram, fragmentProgram) {
     }
 }
 
-window.Shader = Shader;
+return Shader;
 
-})(window);
+})();

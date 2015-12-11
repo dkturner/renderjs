@@ -28,19 +28,22 @@ canvas {
 var canvas = $('canvas')[0];
 canvas.width = $('body').width();
 canvas.height = $('body').height();
-window.createRenderer(canvas).then(function (renderer) {
-    var cube = Primitives.cube();
+renderjs.createRenderer(canvas).then(function (renderer) {
+    var cube = renderjs.Primitives.cube();
     cube.mesh.texture = 'cubetexture.png';
     cube.transform = [
         ['rotate', 30, 1, 0, 0],
-        ['rotate', 'sin($time)*360', 0, 1, 0]
+        ['rotate', 'sin($time)*360', 0, 1, 0],
+        ['scale', 2, 2, 2],
     ];
     renderer.addNode(cube);
-    cube = Primitives.cube();
+    cube = renderjs.Primitives.cube();
     cube.transform = [
-        ['translate', '3.0*cos($time)', -1, '-sin($time)*sin($time)-3.0'],
-        ['rotate','$time*360.0/8.0', 0, 1, 0],
+        ['translate', '3.0*cos($time)', -1, '-sin($time)-1.0'],
+        ['rotate', '$time*360.0/7.0', 0, 1, 0],
+        ['scale', 1.5, 1.5, 1.5]
     ];
+    cube.flags = { wireframe: true };
     renderer.addNode(cube);
     renderer.resources.onresourcesloaded = renderer.start;
 
