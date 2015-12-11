@@ -39,7 +39,7 @@ renderjs.createRenderer(canvas).then(function (renderer) {
         ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
         ['scale', 5, 5, 5],
     ];
-    sphere1.mesh.texture = '/debug/earth_hammer.jpg';
+    sphere1.mesh.texture = 'earth_hammer.jpg';
     renderer.addNode(sphere1);
 
     var sphere2 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'mercator'});
@@ -49,7 +49,7 @@ renderjs.createRenderer(canvas).then(function (renderer) {
         ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
         ['scale', 5, 5, 5],
     ];
-    sphere2.mesh.texture = '/debug/earth_mercator.jpg';
+    sphere2.mesh.texture = 'earth_mercator.jpg';
     renderer.addNode(sphere2);
 
     var sphere3 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'polar'});
@@ -59,7 +59,7 @@ renderjs.createRenderer(canvas).then(function (renderer) {
         ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
         ['scale', 5, 5, 5],
     ];
-    sphere3.mesh.texture = '/debug/earth_polar.jpg';
+    sphere3.mesh.texture = 'earth_polar.jpg';
     renderer.addNode(sphere3);
 
     renderer.resources.onresourcesloaded = renderer.start;
