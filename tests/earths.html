@@ -1,0 +1,114 @@
+<html>
+<head>
+    <title>Alternative Earths</title>
+    <link rel="stylesheet" href="tests.css">
+</head>
+<body>
+    <canvas></canvas>
+    <div id="ui-overlay">
+        <div class="control-bar">
+            <div id="fps"></div>
+            <input id="tilt" type="range" min="-90" max="90" value="0">
+            <input id="spin" type="range" min="-180" max="180" value="0">
+            <label><input id="animate" type="checkbox" checked> Animate</label>
+            <label><input id="grid" type="checkbox"> Grid</label>
+        </div>
+        <table>
+            <tr>
+                <td width="33%"><h1>Mercator</h1></td>
+                <td width="33%"><h1>Hammer</h1></td>
+                <td width="33%"><h1>Polar</h1></td>
+            </tr>
+        </table>
+    </div>
+    <script type="text/javascript" src="../lib/jquery-2.1.4.min.js"></script>
+    <script type="text/javascript" src="../dist/renderjs-0.1.js"></script>
+    <script type="text/javascript">
+
+var canvas = $('canvas')[0];
+canvas.width = $('body').width();
+canvas.height = $('body').height();
+renderjs.createRenderer(canvas).then(function (renderer) {
+    renderer.parameters.tilt = 15.0;
+    renderer.parameters.spin = 0.0;
+    renderer.parameters.animate = 1;
+    var sphere1 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'hammer'});
+    sphere1.transform = [
+        ['translate', 0, 0, -20],
+        ['rotate', 'tilt', 1, 0, 0],
+        ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
+        ['scale', 5, 5, 5],
+    ];
+    sphere1.mesh.texture = '/debug/earth_hammer.jpg';
+    renderer.addNode(sphere1);
+
+    var sphere2 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'mercator'});
+    sphere2.transform = [
+        ['translate', -10, 0, -20],
+        ['rotate', 'tilt', 1, 0, 0],
+        ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
+        ['scale', 5, 5, 5],
+    ];
+    sphere2.mesh.texture = '/debug/earth_mercator.jpg';
+    renderer.addNode(sphere2);
+
+    var sphere3 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'polar'});
+    sphere3.transform = [
+        ['translate', 10, 0, -20],
+        ['rotate', 'tilt', 1, 0, 0],
+        ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
+        ['scale', 5, 5, 5],
+    ];
+    sphere3.mesh.texture = '/debug/earth_polar.jpg';
+    renderer.addNode(sphere3);
+
+    renderer.resources.onresourcesloaded = renderer.start;
+
+    // UI binding
+    $('#tilt').on('input change', function () {
+        renderer.parameters.tilt = +$('#tilt').val();
+        if (!renderer.parameters.animate)
+            renderer.renderAt(0);
+    });
+    $('#spin').on('input change', function () {
+        renderer.parameters.spin = +$('#spin').val();
+        if (!renderer.parameters.animate)
+            renderer.renderAt(0);
+    });
+    $('#animate').on('change', function () {
+        var animating = +$('#animate').prop('checked');
+        renderer.parameters.animate = animating;
+        if (animating)
+            renderer.start();
+        else
+            renderer.stop();
+    });
+    $('#grid').on('change', function () {
+        var grid = +$('#grid').prop('checked');
+        if (grid) {
+            renderer.setTexture(sphere1, 'grid_hammer.png');
+            renderer.setTexture(sphere2, 'grid_mercator.png');
+            renderer.setTexture(sphere3, 'grid_polar.png');
+        } else {
+            renderer.setTexture(sphere1, 'earth_hammer.jpg');
+            renderer.setTexture(sphere2, 'earth_mercator.jpg');
+            renderer.setTexture(sphere3, 'earth_polar.jpg');
+        }
+    });
+
+    var lastFrameCount = 0;
+    var lastTime = new Date().getTime();
+    setInterval(function () {
+        var frames = renderer.frameCount - lastFrameCount;
+        lastFrameCount = renderer.frameCount;
+        var time = new Date().getTime();
+        var elapsed = time - lastTime;
+        lastTime = time;
+        var fps = frames * 1000.0 / elapsed;
+        $('#fps').text(fps.toFixed(1)+' fps');
+    }, 1000);
+});
+
+    </script>
+</body>
+</html>

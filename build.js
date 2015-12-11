@@ -32,7 +32,8 @@ function makeOperators() {
         ['||',                                         { precedence:  5, assoc: 'ltr' }],
         ['?:',                                         { precedence:  4, assoc: 'rtl' }],
         ['=', '+=', '-=', '**=', '*=', '/=', '%=',
-         '<<=', '>>=', '>>>=', '&=', '^=', '|=', '(',  { precedence:  3, assoc: 'rtl' }],
+         '<<=', '>>=', '>>>=', '&=', '^=', '|=',       { precedence:  3, assoc: 'rtl' }],
+        ['(',                                          { precedence:  3 }],
         ['yield',                                      { precedence:  2, assoc: 'rtl' }],
         ['...' ,                                       { precedence:  1 }],
         [',',                                          { precedence:  0, assoc: 'ltr' }],
@@ -83,7 +84,7 @@ function LexicalScope() {
 
 function minify(source, output, options) {
     var defaultOptions = {
-        renameVariables: true,
+        renameVariables: false,
         lexicalScope: new LexicalScope(),
     };
     if (output && !output.call && options == undefined) {
@@ -102,23 +103,42 @@ function minify(source, output, options) {
             n = n || 1;
             return contextStack[contextStack.length - 1 - n];
         }
-        var operStack = [];
+        var currentBlock = {name:'root', operStack: []};
+        function setState(name, value) {
+            currentBlock.popStates = currentBlock.popStates || {};
+            currentBlock.popStates[name] = state(name);
+            state(name, value);
+        }
+        function pushBlock(name) {
+            var newBlock = {name: name, parent: currentBlock, operStack: []};
+            currentBlock = newBlock;
+            lex.push();
+        }
+        function popBlock() {
+            if (currentBlock.popStates) {
+                for (var k in currentBlock.popStates)
+                    state(k, currentBlock.popStates[k]);
+            }
+            lex.pop();
+            currentBlock = currentBlock.parent;
+        }
         function pushOperator(op) {
-            operStack.push(op);
+            currentBlock.operStack.push(op);
         }
         function popOperator() {
-            operStack.pop();
+            currentBlock.operStack.pop();
         }
         function requireBrackets() {
-            if (operStack.length == 1)
+            if (currentBlock.operStack.length == 1)
                 return false;
-            var outerOp = operators[operStack[operStack.length - 2]];
-            var innerOp = operators[operStack[operStack.length - 1]];
+            var outerOp = operators[currentBlock.operStack[currentBlock.operStack.length - 2]];
+            var innerOp = operators[currentBlock.operStack[currentBlock.operStack.length - 1]];
             if (!outerOp)
-                console.error('unrecognized operator ' + operStack[operStack.length - 2]);
+                console.error('unrecognized operator ' + currentBlock.operStack[currentBlock.operStack.length - 2]);
             if (!innerOp)
-                console.error('unrecognized operator ' + operStack[operStack.length - 1]);
-            var higherPrec = outerOp.precedence > innerOp.precedence;
+                console.error('unrecognized operator ' + currentBlock.operStack[currentBlock.operStack.length - 1]);
+            var higherPrec = outerOp.precedence > innerOp.precedence
+                         || (outerOp.precedence == innerOp.precedence && innerOp.assoc == 'ltr');
             return higherPrec;
         }
         var outputStack = [];
@@ -135,25 +155,6 @@ function minify(source, output, options) {
             if (value != undefined)
                 state[name] = value;
             return state[name];
-        }
-        var currentBlock = {name:'root'};
-        function setState(name, value) {
-            currentBlock.popStates = currentBlock.popStates || {};
-            currentBlock.popStates[name] = state(name);
-            state(name, value);
-        }
-        function pushBlock(name) {
-            var newBlock = {name: name, parent: currentBlock};
-            currentBlock = newBlock;
-            lex.push();
-        }
-        function popBlock() {
-            if (currentBlock.popStates) {
-                for (var k in currentBlock.popStates)
-                    state(k, currentBlock.popStates[k]);
-            }
-            lex.pop();
-            currentBlock = currentBlock.parent;
         }
         function lookup(name) {
             if (options.renameVariables)
@@ -239,12 +240,22 @@ function minify(source, output, options) {
                 if (decl.init) {
                     output('=');
                     pushOperator('=');
+                    pushOperator('(');
                     this.visit(decl.init);
+                    pushOperator('(');
                     popOperator();
                 }
             }
-            if (context() == 'BlockStatement')
+            if (context() == 'BlockStatement' || context() == 'Program')
                 output(';');
+            if (context() == 'Program' && options.moduleName
+            && node.declarations.length == 1 && node.declarations[0].init) {
+                output(options.moduleName + '.');
+                this.visit(decl.id);
+                output('=');
+                this.visit(decl.id);
+                output(';');
+            }
         }
         this.AssignmentExpression = function (node) {
             pushOperator(node.operator);
@@ -364,6 +375,22 @@ function minify(source, output, options) {
             this.visit(node.right);
             if (requireBrackets())
                 output(')');
+            popOperator();
+        }
+        this.SequenceExpression = function (node) {
+            pushOperator(',');
+            var brackets = requireBrackets();
+            if (brackets) {
+                output('(');
+            }
+            for (var i = 0; i < node.expressions.length; ++ i) {
+                if (i > 0)
+                    output(',');
+                this.visit(node.expressions[i]);
+            }
+            if (brackets) {
+                output(')');
+            }
             popOperator();
         }
         this.ReturnStatement = function (node) {
@@ -502,7 +529,7 @@ function minify(source, output, options) {
             }
         }
         this.CallExpression = function (node) {
-            if (options.stripModules && node.callee.type == 'FunctionExpression' && context(2) == 'Program') {
+            if (options.stripModules && node.callee.type == 'FunctionExpression' && context(2) == 'Program' && context() != 'VariableDeclaration') {
                 // this may be a module: check if the invocation arguments are the same as the function parameters
                 var argumentsMatchParameters = true;
                 for (var i = 0; i < node.arguments.length; ++i) {
@@ -570,9 +597,9 @@ function minify(source, output, options) {
             }
             output(')');
             this.visit(node.body);
+            popBlock();
             if (requireBrackets())
                 output(')');
-            popBlock();
             popOperator();
         }
         this.visit = function (node) {
@@ -658,7 +685,7 @@ if (typeof window == 'undefined') {
         
         function next() {
             if (sourceIndex >= sources.length) {
-                output('})(window);');
+                output('})(typeof window !== "undefined" ? window : this);');
                 return Promise.resolve(output);
             }
             var nextSource = sources[sourceIndex];
@@ -670,10 +697,14 @@ if (typeof window == 'undefined') {
         console.info('sources: ' + sources);
         var sourceIndex = 0;
         var output = new builder.StringWriter();
-        var options = {stripModules: true};
+        var options = {
+            stripModules: true,
+            moduleName: name,
+            renameVariables: false
+        };
         if (options.stripModules)
             options.lexicalScope = new builder.LexicalScope();
-        output('(function(window){');
+        output('(function(exports){exports.' + name + '={};');
         return next();
     }
 
@@ -687,6 +718,8 @@ if (typeof window == 'undefined') {
     var path = './src/';
     var sources = [
         'matrix.js',
+        'bezier.js',
+        'geometry.js',
         'parser.js',
         'shader.js',
         'renderer.js',

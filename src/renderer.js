@@ -1,10 +1,10 @@
 'use strict';
 
-(function (window) {
+var createRenderer = (function () {
 
 function Renderer(gl, width, height, resources) {
     function render(time) {
-        if (!running)
+        if (!renderer.running && !animationsInProgress)
             return;
         if (sysTime0 == undefined) {
             sysTime0 = time;
@@ -14,11 +14,19 @@ function Renderer(gl, width, height, resources) {
         model.identity();
         currentProgram.cameraMatrix = camera;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        for (var i = 0; i < nodes.length; ++ i)
-            renderNode(currentProgram, nodes[i], time);
+        renderSubnodes(currentProgram, nodes, time);
         renderer.frameCount++;
 
         requestAnimationFrame(render);
+    }
+
+    function renderAt(time) {
+        prepareRender();
+        model.identity();
+        currentProgram.cameraMatrix = camera;
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        renderSubnodes(currentProgram, nodes, time);
+        renderer.frameCount++;
     }
 
     function prepareRender() {
@@ -30,19 +38,11 @@ function Renderer(gl, width, height, resources) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
-    function renderAt(time) {
-        prepareRender();
-        model.identity();
-        currentProgram.cameraMatrix = camera;
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        for (var i = 0; i < nodes.length; ++ i)
-            renderNode(currentProgram, nodes[i], time);
-        renderer.frameCount++;
-    }
-
     function createEvaluator(fArg) {
         if (typeof fArg == 'number')
             return function () { return fArg; };
+        if (typeof fArg == 'boolean')
+            return function () { return fArg ? 1.0 : 0.0; }
         return Parser.createEvaluator(fArg, function (parameter) {
             if (parameter == '$time')
                 return function () { return renderer.time; };
@@ -54,7 +54,7 @@ function Renderer(gl, width, height, resources) {
                     return param;
                 return 0.0;
             }
-        })
+        }, parserBuiltins)
     }
 
     function compose(f1, f2) {
@@ -131,16 +131,26 @@ function Renderer(gl, width, height, resources) {
             } else {
                 // TODO: drawArray
             }
-            if (node.transform) {
-                var fn = undefined;
-                for (var i = 0; i < node.transform.length; ++ i) {
-                    var fn2 = createTransformFunction(node.transform[i]);
-                    if (fn)
-                        fn = compose(fn, fn2);
-                    else
-                        fn = fn2;
-                }
-                result.transform = fn;
+        }
+        if (node.transform) {
+            var fn = undefined;
+            for (var i = 0; i < node.transform.length; ++ i) {
+                var fn2 = createTransformFunction(node.transform[i]);
+                if (fn)
+                    fn = compose(fn, fn2);
+                else
+                    fn = fn2;
+            }
+            result.transform = fn;
+        }
+        if (node.flags) {
+            result.flags = {};
+            for (var k in node.flags) {
+                var value = node.flags[k];
+                result.flags[k] = createEvaluator(value);
+                result.flags[k].passToShaders = (
+                    k == 'wireframe'
+                );
             }
         }
         node.__renderData = result;
@@ -190,27 +200,88 @@ function Renderer(gl, width, height, resources) {
         currentProgram.use();
     }
 
+    function makeEdgeList(mesh) {
+        // currently this assumes triangles
+        var edges = new Uint16Array(mesh.faces.length * 3 * 2);
+        for (var i = 0; i < mesh.faces.length; ++ i) {
+            edges[6*i+0] = mesh.faces[i][0];
+            edges[6*i+1] = mesh.faces[i][1];
+            edges[6*i+2] = mesh.faces[i][1];
+            edges[6*i+3] = mesh.faces[i][2];
+            edges[6*i+4] = mesh.faces[i][2];
+            edges[6*i+5] = mesh.faces[i][0];
+        }
+        var glBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, glBuf);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, edges, gl.STATIC_DRAW);
+        return glBuf;
+    }
+
+    function renderEdges(program, node, data) {
+        var wasWireframe = program.flags.wireframe;
+        if (!data.mesh.edgeList)
+            data.mesh.edgeList = makeEdgeList(node.mesh);
+        program.flags.renderEdges = true;
+        program.vertexPosition = data.mesh.vertexBuffer;
+        program.vertexNormal = data.mesh.normalBuffer;
+        program.textureCoord = data.mesh.texCoords;
+        program.flags.wireframe = false;
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, data.mesh.edgeList);
+        gl.drawElements(gl.LINES, data.mesh.faceCount*2, gl.UNSIGNED_SHORT, 0);
+        program.flags.renderEdges = false;
+        program.flags.wireframe = wasWireframe;
+    }
+
+    function renderSubnodes(program, nodes, time) {
+        for (var i = 0; i < nodes.length; ++ i) {
+            if (!nodes[i].flags || !nodes[i].flags.wireframe)  // TODO: this should use the evaluated version
+                renderNode(program, nodes[i], time);
+        }
+        for (var i = 0; i < nodes.length; ++ i) {
+            if (nodes[i].flags && nodes[i].flags.wireframe)
+                renderNode(program, nodes[i], time);
+        }
+    }
+
     function renderNode(program, node, time) {
         var data = node.__renderData || createRenderData(node);
+        var oldFlags = null;
+        var shouldRenderEdges = data.flags && data.flags.renderEdges && data.flags.renderEdges();
+        if (data.flags) {
+            oldFlags = {};
+            for (var k in data.flags) {
+                var evaluator = data.flags[k];
+                if (evaluator.passToShaders) {
+                    oldFlags[k] = program.flags[k];
+                    program.flags[k] = evaluator();
+                }
+            }
+        }
         if (data.transform) {
             model.push();
             data.transform(model);
         }
         if (data.mesh) {
             program.modelMatrix = model;
-            if (program.flags.wireframe)
+            if (program.flags.wireframe) {
+                if (shouldRenderEdges)
+                    renderEdges(program, node, data);
                 beginWireframe();
+            }
             data.mesh.draw(data.mesh, program);
             if (program.flags.wireframe)
                 endWireframe();
         }
-        if (node.children) {
-            for (var i = 0; i < node.children.length; ++ i) {
-                renderNode(node.children[i]);
-            }
-        }
+        if (!program.flags.wireframe && shouldRenderEdges)
+            renderEdges(program, node, data);
+        if (node.children)
+            renderSubnodes(program, node.children, time);
         if (data.transform)
             model.pop();
+        if (oldFlags) {
+            for (var k in oldFlags)
+                program.flags[k] = oldFlags[k];
+        }
     }
 
     function unpackBuffer(buffer, size, type, target) {
@@ -317,6 +388,109 @@ function Renderer(gl, width, height, resources) {
         throw error;
     }
 
+    function beginRendering() {
+        ready.then(function() {
+            prepareRender();
+            sysTime0 = undefined;
+            requestAnimationFrame(render);
+        }, orThrowError);
+    }
+
+    function startAnimation() {
+        ++animationsInProgress;
+        if (animationsInProgress == 1 && !renderer.running)
+            beginRendering();
+    }
+
+    function endAnimation() {
+        --animationsInProgress;
+    }
+
+    var parserBuiltins = {
+        smooth: {
+            minArgs: 3,
+            factory: function (smoothingFunction, duration, input) {
+                var interpolatorGenerator;
+                smoothingFunction = smoothingFunction && smoothingFunction() || 'ease';
+                if (typeof smoothingFunction == 'string') {
+                    var bez = Bezier[smoothingFunction];
+                    interpolatorGenerator = function (dur) {
+                        return function (t) {
+                            return bez(t, dur);
+                        }
+                    }
+                } else {
+                    interpolatorGenerator = function (dur) {
+                        return function (t) {
+                            return Bezier.cubicBezier(arguments[0](), arguments[1](), arguments[2](), arguments[3], t, dur);
+                        }
+                    }
+                    duration = arguments[4];
+                    input = arguments[5];
+                }
+                var lastDuration = undefined;
+                var interpolator = undefined;
+                var lastValue = undefined;
+                var baseValue = undefined;
+                var targetValue = undefined;
+                var baseTime = undefined;
+                var endTime = undefined;
+                var source = input;
+                var durationFactor = 1.0;
+                return function () {
+                    var x = source();
+                    if (lastValue == undefined)
+                        lastValue = x;
+                    if (lastValue != x) {
+                        var d = +duration();
+                        if (d != lastDuration) {
+                            lastDuration = d;
+                            interpolator = interpolatorGenerator(d);
+                        }
+                        var t;
+                        if (endTime != undefined)
+                            t = (endTime - renderer.Time) / (endTime - baseTime);
+                        if (endTime != undefined && t > 0.01 && t < 0.99) {
+                            // we're currently animating, need to smoothly switch targets
+                            var t_r = renderer.time;
+                            var newEndTime = t_r + d;
+                            var dt = newEndTime - endTime;
+                            var newBaseTime = t_r * (t_r + dt - endTime) / (t_r - endTime);
+                            var i_oldB = interpolator(t_r - baseTime);
+                            var i_newB = interpolator(t_r - newBaseTime);
+                            var newBaseValue = (i_oldB * (targetValue - baseValue) + baseValue - i_newB * x) / (1 - i_newB);
+                            durationFactor = d / (newEndTime - newBaseTime);
+                            targetValue = x;
+                            baseTime = newBaseTime;
+                            endTime = newEndTime;
+                            baseValue = newBaseValue;
+                        } else {
+                            if (endTime == undefined)
+                                startAnimation();
+                            durationFactor = 1.0;
+                            baseValue = lastValue;
+                            baseTime = renderer.time;
+                            endTime = baseTime + d;
+                            targetValue = x;
+                        }
+                        lastValue = x;
+                    }
+                    if (endTime == undefined)
+                        return x;
+                    if (endTime <= renderer.time) {
+                        baseTime = endTime = targetValue = undefined;
+                        endAnimation();
+                        return x;
+                    }
+                    if (baseTime > renderer.time) {
+                        console.log('nothing to see here');
+                    }
+                    return baseValue + (targetValue - baseValue) * interpolator((renderer.time - baseTime) * durationFactor);
+                }
+            }
+        }
+    };
+
     resources.createCache('texture', function (url) {
         return resources.image(url).then (function (img) {
             var texture = gl.createTexture();
@@ -334,7 +508,6 @@ function Renderer(gl, width, height, resources) {
     var renderer = this;
     this.gl = gl;
     this.resources = resources;
-    var running;
     var sysTime0, renderTime0;
     var nodes = [];
     var textures = {};
@@ -348,6 +521,7 @@ function Renderer(gl, width, height, resources) {
     var wireframePostprocProgram;
     var currentProgram;
     var loadingTexture;
+    var animationsInProgress = 0;
     var model = new MatrixStack();
     var camera = new MatrixStack();
     var viewport = new MatrixStack();
@@ -363,6 +537,7 @@ function Renderer(gl, width, height, resources) {
     }).then(function (data) {
         standardProgram = new Shader(gl, data['std-vertex.es2'], data['std-fragment.es2']);
         standardProgram.registerFlag('wireframe');
+        standardProgram.registerFlag('renderEdges');
         standardProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 3);
         standardProgram.registerVertexAttrib('vertexNormal', gl.FLOAT, 3);
         standardProgram.registerVertexAttrib('textureCoord', gl.FLOAT, 2);
@@ -376,7 +551,7 @@ function Renderer(gl, width, height, resources) {
         wireframePostprocProgram.registerUniformMatrix('perspective');
         wireframePostprocProgram.setUniform2f('uViewportSize', width, height);
         wireframePostprocProgram.vertices = unpackBuffer([[-1,-1],[1,-1],[1,1],[1,1],[-1,1],[-1,-1]], 2);
-        wireframePostprocProgram.texCoords = unpackBuffer([[0,1],[1,1],[1,0],[1,0],[0,0],[0,1]], 2);
+        wireframePostprocProgram.texCoords = unpackBuffer([[0,0],[1,0],[1,1],[1,1],[0,1],[0,0]], 2);
 
         currentProgram = standardProgram;
 
@@ -386,23 +561,23 @@ function Renderer(gl, width, height, resources) {
     });
 
     preprocessed = createFramebuffer();
-    viewport.perspective(60, +width/+height, 1, 100);
-    camera.translate(0, 0, -5);
+    viewport.perspective(30, +width/+height, 1, 50);
+    camera.translate(0, 0, -10);
 
     // Public interface
     this.time = 0; // in seconds
+    this.running = false;
     this.parameters = {};
     this.frameCount = 0;
     this.start = function () {
-        ready.then(function() {
-            prepareRender();
-            running = true;
-            sysTime0 = undefined;
-            requestAnimationFrame(render);
-        }, orThrowError);
+        if (renderer.running)
+            return;
+        renderer.running = true;
+        if (!animationsInProgress)
+            beginRendering();
     }
     this.stop = function () {
-        running = false;
+        renderer.running = false;
     }
     this.renderAt = function (time) {
         ready.then(function () {
@@ -419,6 +594,16 @@ function Renderer(gl, width, height, resources) {
             nodes.splice(idx, 1);
             releaseRenderData(node);
         }
+    }
+    this.bindParameter = function (name, fn) {
+        // actually no magic here, just psychology
+        this.parameters[name] = fn;
+    }
+    this.setTexture = function (node, texture) {
+        this.resources.texture(texture).then (function (tex) {
+            if (node.__renderData)
+                node.__renderData.mesh.texture = tex;
+        });
     }
 }
 
@@ -507,7 +692,7 @@ function Resources(resourcePath) {
     this.onresourcesloaded = function () {};
 }
 
-window.createRenderer = function (canvas, resourcePath) {
+function createRenderer(canvas, resourcePath) {
     return new Promise(function (resolve, reject) {
         var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         if (!gl)
@@ -532,4 +717,5 @@ window.createRenderer = function (canvas, resourcePath) {
     });
 }
 
-})(window);
+return createRenderer;
+})();

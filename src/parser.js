@@ -1,10 +1,11 @@
 'use strict';
 
-(function (window) {
+var Parser = (function (window) {
 
 var tokens = {
     ident: '[a-zA-Z_$][a-zA-Z_$0-9]*',
-    num: '-?[0-9]+(?:\.[0-9]*)?',
+    num: '-?[0-9]+(?:\\.[0-9]*)?',
+    string: '(?:"[^"]*(?:"[^"]+)*")|(?:\'[^\']*(?:\'[^\']+)*\')',
     oper: '[+*^/%.,-]',
     bracket: '[)(]'
 }
@@ -18,6 +19,21 @@ var END = new Object();
 // factor -> atom (^ atom)*
 // atom -> IDENT | NUM | fcall | '(' negatable ')'
 // fcall -> IDENT '(' ( expression ( ',' negatable )*)? ')'
+
+function parseString(str) {
+    if (str[0] == "'")
+        return str.substring(1, str.length - 1).replace("''", "'");
+    else
+        return str.substring(1, str.length - 1).replace('""', '"');
+}
+
+function IfFunction(test, consequent, alternative) {
+    if (test())
+        return consequent();
+    if (alternative)
+        return alternative();
+    return 0.0;
+}
 
 function Parser() {
     function negatable() {
@@ -37,6 +53,8 @@ function Parser() {
             return fcall();
         } else if (currentSymbol.type == tokens.num) {
             return accept({op: 'const', value: +currentSymbol.value});
+        } else if (currentSymbol.type == tokens.string) {
+            return accept({op: 'const', value: parseString(currentSymbol.value)});
         } else if (currentSymbol.value == '(') {
             shiftSymbol();
             var result = negatable();
@@ -123,8 +141,21 @@ function Parser() {
         if (tree.op == 'call') {
             var fn = parser.builtins[tree.name];
             if (!fn)
+                fn = parser.resolve(tree.name);  // user-defined function
+            if (!fn)
                 throw {error: 'unknown function ' + tree.name};
             var args = tree.args.map(emit);
+            if (typeof fn != 'function') {
+                var lazyEval = fn.lazyEval;
+                if (fn.minArgs && args.length < fn.minArgs)
+                    throw {error:'too few arguments to function', reason: { funcName: tree.name, minArgs: fn.minArgs }};
+                if (fn.singleton)
+                    fn = fn.singleton;
+                else
+                    return fn.factory.apply(fn, args);
+                if (lazyEval)
+                    return function () { return fn.apply(this, args); };
+            }
             return function () {
                 return fn.apply(this, args.map(function(a) {
                     return a();
@@ -197,16 +228,25 @@ function Parser() {
         atan2: Math.atan2,
         exp: Math.exp,
         log: Math.log,
+        if: {
+            lazyEval: true,
+            minArgs: 2,
+            singleton: IfFunction
+        },
     }
 }
 
-Parser.createEvaluator = function (expression, resolver) {
+Parser.createEvaluator = function (expression, resolver, builtins) {
     var p = new Parser();
+    if (builtins) {
+        for (var k in builtins)
+            p.builtins[k] = builtins[k];
+    }
     p.resolve = resolver;
     p.parse(expression);
     return p.createEvaluator();
 };
 
-window.Parser = Parser;
+return Parser;
 
-})(window);
+})();

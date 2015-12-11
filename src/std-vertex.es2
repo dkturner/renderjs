@@ -12,11 +12,13 @@ uniform bool uWireframe;
 varying lowp vec4 vColor;
 varying highp vec2 vTextureCoord;
 varying highp float vNormalizedDepth;
+varying highp vec4 vPosition;
 
 void main(void) {
     vec4 cameraSpace = uCameraMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
     vec4 clipSpace = uViewportMatrix * cameraSpace;
     gl_Position = clipSpace;
+    vPosition = clipSpace;
     if (uWireframe) {
         // calculate the near and far planes in camera space
         vec4 f_ = vec4(0,0,1,-1) * uViewportMatrix;

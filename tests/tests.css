@@ -1,0 +1,60 @@
+body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+}
+
+#ui-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    color: white;
+    font-family: sans-serif;
+}
+
+.control-bar {
+    display: table;
+}
+
+.control-bar > * {
+    display: table-cell;
+    vertical-align: middle;
+    height: 20px;
+    margin: 5px;
+}
+
+#fps {
+    background: rgba(255, 255, 255, 0.5);
+    width: 70px;
+    text-align: right;
+    padding: 5px;
+}
+
+table {
+    width: 100%;
+    text-align: center;
+    margin-top: 20px;
+    color: white;
+}
+
+h1 {
+    text-shadow: 2px 2px 5px black;
+    font-size: 40px;
+}
+
+input[type="checkbox"] {
+    margin-left: 10px;
+    position: relative;
+    top: 1px;
+}

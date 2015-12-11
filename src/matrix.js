@@ -1,6 +1,15 @@
+/* Matrix stack designed for WebGL use.
+ * WebGL matrices are stored in column-major format, and so therefore ours are too.  This caught me out the first
+ * time.  By convention most of the operations here are *right* multiplications, i.e. matrix.translate(x,y,z)
+ * is equivalent to M_1 x M_t, where M_1 is the current matrix and M_t is the translation matrix.  The reason for
+ * this is that scene rendering progresses from outside to inside, i.e. the most recent operation is also the
+ * "most local" - a translate followed by a scale means "first size the object and then move it".  Given that
+ * the transformation to clip space is P x C x M x v (P = perspective, C = camera, M = model, v = point), the first
+ * operations to be applied are the ones on the right.
+ */
 'use strict';
 
-(function (window) {
+var MatrixStack = (function () {
     function Asm(stdlib, foreign, heap) {
         'use asm';
 
@@ -46,25 +55,29 @@
             index = index<<6;
             f = 1.0 / tan(fov / 2.0);
             rangeInv = 1.0 / (near - far);
+            // col 1
             data[(index+ 0)>>2] = fround(f / ar);
             data[(index+ 4)>>2] = fround(0.0);
             data[(index+ 8)>>2] = fround(0.0);
             data[(index+12)>>2] = fround(0.0);
+            // col 2
             data[(index+16)>>2] = fround(0.0);
             data[(index+20)>>2] = fround(f);
             data[(index+24)>>2] = fround(0.0);
             data[(index+28)>>2] = fround(0.0);
+            // col 3
             data[(index+32)>>2] = fround(0.0);
             data[(index+36)>>2] = fround(0.0);
             data[(index+40)>>2] = fround((near + far) * rangeInv);
             data[(index+44)>>2] = fround(-1.0);
+            // col 4
             data[(index+48)>>2] = fround(0.0);
             data[(index+52)>>2] = fround(0.0);
             data[(index+56)>>2] = fround(near * far * rangeInv * 2.0);
             data[(index+60)>>2] = fround(0.0);
         }
 
-        function lmul(dst, src) {
+        function rmul(dst, src) {
             dst = dst|0;
             src = src|0;
             var m11=fround(0.0),m12=fround(0.0),m13=fround(0.0),m14=fround(0.0),
@@ -73,6 +86,7 @@
                 m41=fround(0.0),m42=fround(0.0),m43=fround(0.0),m44=fround(0.0);
             dst = dst<<6;
             src = src<<6;
+            // col 1
             m11 = fround(fround(
                   fround(fround(data[(src+ 0)>>2]) * fround(data[(dst+ 0)>>2]))
                 + fround(fround(data[(src+ 4)>>2]) * fround(data[(dst+16)>>2]))) + fround(
@@ -93,6 +107,7 @@
                 + fround(fround(data[(src+ 4)>>2]) * fround(data[(dst+28)>>2]))) + fround(
                   fround(fround(data[(src+ 8)>>2]) * fround(data[(dst+44)>>2]))
                 + fround(fround(data[(src+12)>>2]) * fround(data[(dst+60)>>2]))));
+            // col 2
             m21 = fround(fround(
                   fround(fround(data[(src+16)>>2]) * fround(data[(dst+ 0)>>2]))
                 + fround(fround(data[(src+20)>>2]) * fround(data[(dst+16)>>2]))) + fround(
@@ -113,6 +128,7 @@
                 + fround(fround(data[(src+20)>>2]) * fround(data[(dst+28)>>2]))) + fround(
                   fround(fround(data[(src+24)>>2]) * fround(data[(dst+44)>>2]))
                 + fround(fround(data[(src+28)>>2]) * fround(data[(dst+60)>>2]))));
+            // col 3
             m31 = fround(fround(
                   fround(fround(data[(src+32)>>2]) * fround(data[(dst+ 0)>>2]))
                 + fround(fround(data[(src+36)>>2]) * fround(data[(dst+16)>>2]))) + fround(
@@ -133,6 +149,7 @@
                 + fround(fround(data[(src+36)>>2]) * fround(data[(dst+28)>>2]))) + fround(
                   fround(fround(data[(src+40)>>2]) * fround(data[(dst+44)>>2]))
                 + fround(fround(data[(src+44)>>2]) * fround(data[(dst+60)>>2]))));
+            // col 4
             m41 = fround(fround(
                   fround(fround(data[(src+48)>>2]) * fround(data[(dst+ 0)>>2]))
                 + fround(fround(data[(src+52)>>2]) * fround(data[(dst+16)>>2]))) + fround(
@@ -171,7 +188,7 @@
             data[(dst+60)>>2] = m44;
         }
 
-        function rmul(dst, src) {
+        function lmul(dst, src) {
             dst = dst|0;
             src = src|0;
             var m11=fround(0.0),m12=fround(0.0),m13=fround(0.0),m14=fround(0.0),
@@ -293,20 +310,6 @@
             data[(index+52)>>2] = fround(m42);
             data[(index+56)>>2] = fround(m43);
             data[(index+60)>>2] = fround(m44);
-            /* right-translate
-            data[(index+ 0)>>2] = fround(+data[(index+ 0)>>2] + x*+data[(index+12)>>2]);
-            data[(index+ 4)>>2] = fround(+data[(index+ 4)>>2] + y*+data[(index+12)>>2]);
-            data[(index+ 8)>>2] = fround(+data[(index+ 8)>>2] + z*+data[(index+12)>>2]);
-            data[(index+16)>>2] = fround(+data[(index+16)>>2] + x*+data[(index+28)>>2]);
-            data[(index+20)>>2] = fround(+data[(index+20)>>2] + y*+data[(index+28)>>2]);
-            data[(index+24)>>2] = fround(+data[(index+24)>>2] + z*+data[(index+28)>>2]);
-            data[(index+32)>>2] = fround(+data[(index+32)>>2] + x*+data[(index+44)>>2]);
-            data[(index+36)>>2] = fround(+data[(index+36)>>2] + y*+data[(index+44)>>2]);
-            data[(index+40)>>2] = fround(+data[(index+40)>>2] + z*+data[(index+44)>>2]);
-            data[(index+48)>>2] = fround(+data[(index+48)>>2] + x*+data[(index+60)>>2]);
-            data[(index+52)>>2] = fround(+data[(index+52)>>2] + y*+data[(index+60)>>2]);
-            data[(index+56)>>2] = fround(+data[(index+56)>>2] + z*+data[(index+60)>>2]);
-            */
         }
 
         function scale(index, x, y, z) {
@@ -315,18 +318,21 @@
             y = +y;
             z = +z;
             index = index<<6;
+            // col 1
             data[(index+ 0)>>2] = fround(x*+data[(index+ 0)>>2]);
-            data[(index+ 4)>>2] = fround(y*+data[(index+ 4)>>2]);
-            data[(index+ 8)>>2] = fround(z*+data[(index+ 8)>>2]);
-            data[(index+16)>>2] = fround(x*+data[(index+16)>>2]);
+            data[(index+ 4)>>2] = fround(x*+data[(index+ 4)>>2]);
+            data[(index+ 8)>>2] = fround(x*+data[(index+ 8)>>2]);
+            data[(index+12)>>2] = fround(x*+data[(index+12)>>2]);
+            // col 2
+            data[(index+16)>>2] = fround(y*+data[(index+16)>>2]);
             data[(index+20)>>2] = fround(y*+data[(index+20)>>2]);
-            data[(index+24)>>2] = fround(z*+data[(index+24)>>2]);
-            data[(index+32)>>2] = fround(x*+data[(index+32)>>2]);
-            data[(index+36)>>2] = fround(y*+data[(index+36)>>2]);
+            data[(index+24)>>2] = fround(y*+data[(index+24)>>2]);
+            data[(index+28)>>2] = fround(y*+data[(index+28)>>2]);
+            // col 3
+            data[(index+32)>>2] = fround(z*+data[(index+32)>>2]);
+            data[(index+36)>>2] = fround(z*+data[(index+36)>>2]);
             data[(index+40)>>2] = fround(z*+data[(index+40)>>2]);
-            data[(index+48)>>2] = fround(x*+data[(index+48)>>2]);
-            data[(index+52)>>2] = fround(y*+data[(index+52)>>2]);
-            data[(index+56)>>2] = fround(z*+data[(index+56)>>2]);
+            data[(index+44)>>2] = fround(z*+data[(index+44)>>2]);
         }
 
         function rotation(dst, theta, x, y, z) {
@@ -341,22 +347,26 @@
             length = sqrt(x2 + y2 + z2);
             cos_t = cos(theta);
             sin_t = sin(theta);
-            comp_t = 1 - cos_t;
+            comp_t = 1.0 - cos_t;
             x = x / length;
             y = y / length;
             z = z / length;
+            // col 1
             data[(dst+ 0)>>2] = fround(x2 + (y2 + z2) * cos_t);
             data[(dst+ 4)>>2] = fround(x*y*comp_t + z*sin_t);
             data[(dst+ 8)>>2] = fround(x*z*comp_t - y*sin_t);
             data[(dst+12)>>2] = fround(0.0);
+            // col 2
             data[(dst+16)>>2] = fround(x*y*comp_t - z*sin_t);
             data[(dst+20)>>2] = fround(y2 + (x2 + z2) * cos_t);
             data[(dst+24)>>2] = fround(y*z*comp_t + x*sin_t);
             data[(dst+28)>>2] = fround(0.0);
+            // col 3
             data[(dst+32)>>2] = fround(x*z*comp_t + y*sin_t);
             data[(dst+36)>>2] = fround(y*z*comp_t - x*sin_t);
             data[(dst+40)>>2] = fround(z2 + (x2 + y2) * cos_t);
             data[(dst+44)>>2] = fround(0.0);
+            // col 4
             data[(dst+48)>>2] = fround(0.0);
             data[(dst+52)>>2] = fround(0.0);
             data[(dst+56)>>2] = fround(0.0);
@@ -380,11 +390,10 @@
             z = +z;
             var x_=0.0, y_=0.0, z_=0.0, u_=0.0;
             index = index<<6;
-            // webGL does right-multiplication (is this an ES2 thing?) - vectors are row-vectors, bra.
-            x_ = data[(index+ 0)>>2]*x + data[(index+16)>>2]*y + data[(index+32)>>2]*z + data[(index+48)>>2];
-            y_ = data[(index+ 4)>>2]*x + data[(index+20)>>2]*y + data[(index+36)>>2]*z + data[(index+52)>>2];
-            z_ = data[(index+ 8)>>2]*x + data[(index+24)>>2]*y + data[(index+40)>>2]*z + data[(index+56)>>2];
-            u_ = data[(index+12)>>2]*x + data[(index+28)>>2]*y + data[(index+44)>>2]*z + data[(index+60)>>2];
+            x_ = x*+data[(index+ 0)>>2] + y*+data[(index+16)>>2] + z*+data[(index+32)>>2] + +data[(index+48)>>2];
+            y_ = x*+data[(index+ 4)>>2] + y*+data[(index+20)>>2] + z*+data[(index+36)>>2] + +data[(index+52)>>2];
+            z_ = x*+data[(index+ 8)>>2] + y*+data[(index+24)>>2] + z*+data[(index+40)>>2] + +data[(index+56)>>2];
+            u_ = x*+data[(index+12)>>2] + y*+data[(index+28)>>2] + z*+data[(index+44)>>2] + +data[(index+60)>>2];
             data[( 0)>>2] = fround(x_ / u_);
             data[( 4)>>2] = fround(y_ / u_);
             data[( 8)>>2] = fround(z_ / u_);
@@ -426,7 +435,7 @@
         }
         this.rotate = function(deg, vector) {
             asm.rotation(0, 2*Math.PI*deg/360.0, vector[0], vector[1], vector[2]);
-            asm.lmul(count, 0);
+            asm.rmul(count, 0);
         }
         this.push = function () {
             asm.copy(count + 1, count);
@@ -436,11 +445,14 @@
             count--;
         }
         this.mul = function () {
-            asm.lmul(count - 1, count);
+            asm.rmul(count - 1, count);
             count--;
         }
         this.transform = function (x, y, z) {
-            asm.transform(count, x, y, z);
+            if (y == undefined && z == undefined)
+                asm.transform(count, x[0], x[1], x[2]);
+            else
+                asm.transform(count, x, y, z);
             return [scratch[0], scratch[1], scratch[2]];
         }
         this.getData = function() {
@@ -448,5 +460,5 @@
         }
     }
 
-    window.MatrixStack = MatrixStack;
-})(window);
+    return MatrixStack;
+})();
