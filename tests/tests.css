@@ -25,6 +25,7 @@ canvas {
 
 .control-bar {
     display: table;
+    height: 20px;
 }
 
 .control-bar > * {

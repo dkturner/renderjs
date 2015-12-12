@@ -81,9 +81,10 @@ var Geometry = (function () {
     }
 
     function sameSign() {
-        var sign = Math.sign(arguments[0]);
+        // IE doesn't support Math.sign....
+        var sign = arguments[0] < 0 ? -1 : arguments[0] == 0 ? 0 : 1;
         for (var i = 1; i < arguments.length; ++ i)
-            if (Math.sign(arguments[i]) != sign)
+            if ((arguments[i] < 0 ? -1 : arguments[i] == 0 ? 0 : 1) != sign)
                 return false;
         return true;
     }
@@ -106,7 +107,7 @@ var Geometry = (function () {
                 var u = Math.atan2(x, z) / (2*Math.PI) + 0.5;
                 return [u, v];
             },
-            getTextureCoordinates(v1, v2, v3) {
+            getTextureCoordinates: function(v1, v2, v3) {
                 var coords = [ Maps.Polar.project(v1), Maps.Polar.project(v2), Maps.Polar.project(v3) ];
                 if ((v1[2] < 0 || v2[2] < 0 || v3[2] < 0) && !sameSign(v1[0], v2[0], v3[0])) {
                     // handle wrapping around the date line
@@ -149,7 +150,7 @@ var Geometry = (function () {
                 var v = 0.5 - Math.log(Math.tan((lat + Math.PI/2)/2)) / (2*Math.PI);
                 return [u, v];
             },
-            getTextureCoordinates(v1, v2, v3) {
+            getTextureCoordinates: function (v1, v2, v3) {
                 var coords = [ Maps.Mercator.project(v1), Maps.Mercator.project(v2), Maps.Mercator.project(v3) ];
                 if ((v1[2] < 0 || v2[2] < 0 || v3[2] < 0) && !sameSign(v1[0], v2[0], v3[0])) {
                     // handle wrapping around the date line
@@ -206,7 +207,7 @@ var Geometry = (function () {
                 var yn = Math.sin(lat)/zn;
                 return [(xn+1)/2, (1-yn)/2];
             },
-            getTextureCoordinates(v1, v2, v3) {
+            getTextureCoordinates: function (v1, v2, v3) {
                 var coords = [ Maps.HammerAitoff.project(v1), Maps.HammerAitoff.project(v2), Maps.HammerAitoff.project(v3) ];
                 if (!sameSign(v1[0], v2[0], v3[0])) {
                     // check if this is the pathological case where the triangle straddles the polar axis
