@@ -1,29 +1,19 @@
 <html>
 <head>
     <title>Spinning Cube</title>
-    <style type="text/css">
-body {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    top: 0;
-    margin: 0;
-    overflow: hidden;
-}
-
-canvas {
-    width: 100%;
-    height: 100%;
-    background: black;
-}
-    </style>
+    <link rel="stylesheet" href="tests.css"></style>
 </head>
 <body>
     <canvas></canvas>
-    <div id="fps" style="position:absolute; top:0; right: 0; width: 60px; padding: 5px; color: white; text-align: right"></div>
+    <div id="ui-overlay">
+        <div class="control-bar">
+            <div id="fps" style="position:absolute; top:0; right: 0; width: 60px; padding: 5px; color: white; text-align: right"></div>
+            <button onclick="Test.showSource()">Show source</button>
+        </div>
+    </div>
     <script type="text/javascript" src="../lib/jquery-2.1.4.min.js"></script>
     <script type="text/javascript" src="../dist/renderjs-0.1.js"></script>
+    <script type="text/javascript" src="test.js"></script>
     <script type="text/javascript">
 var canvas = $('canvas')[0];
 canvas.width = $('body').width();
@@ -46,19 +36,6 @@ renderjs.createRenderer(canvas).then(function (renderer) {
     cube.flags = { wireframe: true };
     renderer.addNode(cube);
     renderer.resources.onresourcesloaded = renderer.start;
-
-    // FPS display
-    var lastFrameCount = 0;
-    var lastTime = new Date().getTime();
-    setInterval(function () {
-        var frames = renderer.frameCount - lastFrameCount;
-        lastFrameCount = renderer.frameCount;
-        var time = new Date().getTime();
-        var elapsed = time - lastTime;
-        lastTime = time;
-        var fps = frames * 1000.0 / elapsed;
-        $('#fps').text(fps.toFixed(1)+' fps');
-    }, 1000);
 });
 
     </script>
