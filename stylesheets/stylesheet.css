@@ -106,7 +106,7 @@ a.button {
   display: block;
   float: left;
   width: 179px;
-  padding: 12px 8px 12px 8px;
+  padding: 8px;
   margin-right: 14px;
   font-size: 15px;
   font-weight: bold;
@@ -148,8 +148,13 @@ a.button:hover {
 
 a.button span {
   display: block;
-  height: 23px;
+  height: 32px;
   padding-left: 50px;
+  padding-top: 4px;
+}
+
+#view-demos span {
+  background: transparent url(../images/earth-icon.png) 12px 50% no-repeat;
 }
 
 #download-zip span {
@@ -163,6 +168,19 @@ a.button span {
 }
 #view-on-github {
   margin-right: 0;
+}
+
+img.preview {
+	float: left;
+	width: 200px;
+	height: 150px;
+	margin-right: 20px;
+	margin-bottom: 50px;
+	box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+h3, footer {
+	clear: both;
 }
 
 code, pre {
