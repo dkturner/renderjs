@@ -12,6 +12,7 @@
             <input id="spin" type="range" min="-180" max="180" value="0">
             <label><input id="animate" type="checkbox" checked> Animate</label>
             <label><input id="grid" type="checkbox"> Grid</label>
+            <button onclick="Test.showSource()">Show source</button>
         </div>
         <table>
             <tr>
@@ -23,8 +24,8 @@
     </div>
     <script type="text/javascript" src="../lib/jquery-2.1.4.min.js"></script>
     <script type="text/javascript" src="../dist/renderjs-0.1.js"></script>
+    <script type="text/javascript" src="test.js"></script>
     <script type="text/javascript">
-
 var canvas = $('canvas')[0];
 canvas.width = $('body').width();
 canvas.height = $('body').height();
@@ -95,18 +96,6 @@ renderjs.createRenderer(canvas).then(function (renderer) {
             renderer.setTexture(sphere3, 'earth_polar.jpg');
         }
     });
-
-    var lastFrameCount = 0;
-    var lastTime = new Date().getTime();
-    setInterval(function () {
-        var frames = renderer.frameCount - lastFrameCount;
-        lastFrameCount = renderer.frameCount;
-        var time = new Date().getTime();
-        var elapsed = time - lastTime;
-        lastTime = time;
-        var fps = frames * 1000.0 / elapsed;
-        $('#fps').text(fps.toFixed(1)+' fps');
-    }, 1000);
 });
 
     </script>

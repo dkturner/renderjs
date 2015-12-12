@@ -776,6 +776,7 @@ function createRenderer(canvas, resourcePath) {
         }).then(function(preloaded) {
             try {
                 var renderer = new Renderer(gl, canvas.width, canvas.height, resources);
+                canvas.__renderjs = renderer;
                 resolve(renderer);
             } catch (error) {
                 reject(error);

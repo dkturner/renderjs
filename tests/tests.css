@@ -59,3 +59,62 @@ input[type="checkbox"] {
     position: relative;
     top: 1px;
 }
+#fps {
+    position: absolute;
+    right: 5px;
+}
+#source {
+    position: absolute;
+    background: rgba(128, 128, 128, 0.75);
+    right: 5px;
+    top: 55px;
+    bottom: 30px;
+    padding: 5px;
+    width: 500px;
+    border: 1px solid #888;
+}
+
+#source h3 {
+    margin-top: 0;
+}
+
+#source button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+#source .container {
+    overflow: auto;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 30px;
+    bottom: 0;
+    border-top: 1px solid #444;
+}
+
+#source pre {
+    padding: 5px;
+    background: rgba(0,0,0,0.75);
+}
+
+button {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #888;
+    color: white;
+    text-transform: lowercase;
+    cursor: pointer;
+    margin-left: 20px !important;
+}
+
+button:hover {
+    background: rgba(80, 80, 80, 0.75);
+}
+
+.js-rw { font-style: italic; }
+.js-ns { color: #8ef; }
+.js-ident { color: #c8d8f8; }
+.js-mem { color: pink; }
+.js-str { color: #F75E67; }
+.js-num { color: #88b8e8; }
