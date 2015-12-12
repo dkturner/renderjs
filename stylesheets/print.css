@@ -26,8 +26,11 @@ footer, header, hgroup, menu, nav, section {
 body {
   line-height: 1;
 }
-ol, ul {
-  list-style: none;
+ol {
+  list-style-type: disc;
+}
+ul {
+  list-style-type: decimal;
 }
 blockquote, q {
   quotes: none;
@@ -189,12 +192,14 @@ ul li {
   list-style-position: inside;
   list-style: disc;
   padding-left: 20px;
+  margin-bottom: 10px;
 }
 
 ol li {
   list-style-position: inside;
   list-style: decimal;
   padding-left: 3px;
+  margin-bottom: 10px;
 }
 
 dl dd {

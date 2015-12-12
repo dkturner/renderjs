@@ -31,7 +31,57 @@
         <hr>
 
         <section id="main_content">
+            <h3>Renderjs in three lines</h3>
+            <pre class="javascript"><span class="js-glob">renderjs</span>.<span class="js-mem">createRenderer</span>(<span class="js-var">canvas</span>).<span class="js-mem">then</span>(<span class="js-var">renderer</span> => {
+    <span class="js-var">renderer</span>.<span class="js-mem">addNode</span>(<span class="js-glob">renderjs</span>.<span class="js-cls">Primitives</span>.<span class="js-mem">cube</span>());
+    <span class="js-var">renderer</span>.<span class="js-mem">start</span>();
+});</pre>
 
+            <h3>The slightly longer story</h3>
+            <p>Renderjs is a framework for building 3D web applications. The principles behind its design are:</p>
+            <ul>
+                <li><strong>Simplicity</strong></li>
+                <li><strong>Non-intrusiveness</strong></li>
+                <li><strong>Flexibility</strong></li>
+            </ul>
+            <p>The rendering engine takes a <a href="help/basics.html#scene-graph">scene graph</a> and continuously
+            renders it using <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API">WebGL</a>.  The
+            beauty is in the design of the scene graph: it's a JSON-friendly format that uses
+            <a href="help/basics.html#expression">expressions</a> and <a href="help/basics.html#binding">bindings</a>
+            to create a dynamic scene from static data.</p>
+            <p>The upshot of this is that it's very easy to create a simple 3D scene, and at the same time you
+            don't lose out on the power and flexibility of modern graphics cards. For example, you can
+            define your own shaders on a per-object basis:</p>
+            <pre class="json">{
+    <span class="jn-key">children</span>: [ {
+        <span class="jn-key">id</span>: <span class="jn-str">'standard-render'</span>,
+        <span class="jn-key">mesh</span>: { ... }
+    }, {
+        <span class="jn-key">id</span>: <span class="jn-str">'custom-render'</span>,
+        <span class="jn-key">mesh</span>: { ... },
+        <span class="jn-key">shaders</span>: {
+            <span class="jn-key">fragment</span>: <span class="jn-str">'shaders/my-custom-shader.es2'</span>
+        }
+    }]
+}</pre>
+
+            <h3>Getting started</h3>
+            <p>You may want to start by looking at the <a href="demos.html">demos</a>.  After that, read through the
+            <a href="help/tutorial.html">tutorial</a>, and make sure you're up to speed with the
+            <a href="help/basics.html">basics</a> before proceeding to the
+            <a href="help/advanced.html">advanced topics</a>.</p>
+
+            <h3>Contributing</h3>
+            <p>Contributors are always welcome! If you feel you have something to add to the project (be it
+            criticism or code), visit the <a href="https://github.com/dkturner/renderjs">Github page</a>. Be sure
+            to check the <a href="help/faq.html">FAQ</a> first, though - your issue may have already been resolved.</p>
+
+            <h3>The fine print</h3>
+            <p>Renderjs is licensed under the <a href="http://www.gnu.org/licenses/lgpl-3.0.en.html">GNU Lesser General
+            Public License v3.0</a>. Basically that means you're free to use it (even for commercial purposes),
+            provided that (a) you correctly attribute the code to its authors, and (b) any extensions or modifications
+            to the library itself are also licensed under LGPL3 (and you must therefore make the source of your
+            modified version available to anybody who asks for it).</p>
         </section>
 
         <footer>
