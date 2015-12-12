@@ -641,7 +641,7 @@ if (typeof window == 'undefined') {
         }
 
         function injectResources(source) {
-            return Promise.resolve(source.replace(/\/\/!([A-Z]+)\s+(.*)/g, function (_, command, arguments) {
+            return Promise.resolve(source.replace(/\/\/!([A-Z]+)\s+(.*)$/gm, function (_, command, arguments) {
                 if (command == 'EMBED') {
                     var fileListIndex = arguments.indexOf(':');
                     var resourcePack = arguments.substring(0, fileListIndex);
