@@ -460,5 +460,11 @@ var MatrixStack = (function () {
         }
     }
 
+    // IE shim, it doesn't appear to support asmjs anyway...
+    if (typeof window != 'undefined' && typeof window.Math.fround == 'undefined')
+        window.Math.fround = function (x) { return x; };
+    if (typeof window != 'undefined' && typeof window.Math.imul == 'undefined')
+        window.Math.imul = function (x, y) { return x * y; };
+
     return MatrixStack;
 })();
