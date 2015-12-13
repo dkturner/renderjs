@@ -1,14 +1,46 @@
 precision highp float;
 
+const int MAX_LIGHTS = 100;
+
 uniform sampler2D uSampler0;
 uniform bool uWireframe;
 uniform bool uRenderEdges;
 uniform mat4 uViewportMatrix;
+uniform vec3 uCameraPosition;
+uniform int uNumberOfLights;
+uniform vec3 uLightPositions[MAX_LIGHTS];
+uniform vec3 uLightColors[MAX_LIGHTS];
+
+uniform struct Complex {
+    float Re;
+    float Im;
+} uRefractiveIndex;
+
+uniform float uAmbientRefractiveIndex;
+uniform float uGloss;
 
 varying lowp vec4 vColor;
 varying highp vec2 vTextureCoord;
 varying highp float vNormalizedDepth;
 varying highp vec4 vPosition;
+varying highp vec3 vModelSpacePosition;
+varying highp vec3 vCamSpacePosition;
+varying highp vec3 vNormal;
+
+float modifiedBessel_0(float x) {
+    float ax = abs(x);
+    float y;
+
+   if (ax < 3.75) {
+      y = x/3.75;
+      y = y*y;
+      return 1.0 + y*(3.5156229 + y*(3.0899424 + y*(1.2067492 + y*(0.2659732 + y*(0.360768e-1 + y*0.45813e-2)))));
+   } else {
+      y = 3.75 / ax;
+      return (exp(ax)/sqrt(ax)) * (0.39894228 + y*(0.1328592e-1 + y*(0.225319e-2 + y*(-0.157565e-2 + y*(0.916281e-2
+         + y*(-0.2057706e-1 + y*(0.2635537e-1 + y*(-0.1647633e-1 + y*0.392377e-2))))))));
+   }
+}
 
 void main(void) {
     if (!gl_FrontFacing)
@@ -21,6 +53,74 @@ void main(void) {
         depthRep = log(depthRep * (exp(1.0) - 1.0) + 1.0);
         gl_FragColor = vec4(vColor.rgb, depthRep);
     } else {
-        gl_FragColor = texture2D(uSampler0, vec2(vTextureCoord.s, vTextureCoord.t));
+        vec4 textureColor = texture2D(uSampler0, vec2(vTextureCoord.s, vTextureCoord.t));
+        vec4 fragColor;
+        if (uNumberOfLights > 0) {
+            vec3 normal = normalize(vNormal);
+            vec3 totalLight = vec3(0, 0, 0);
+            for (int i = 0; i < MAX_LIGHTS; ++i) {
+                if (i >= uNumberOfLights)
+                    break;
+                vec3 lightColor = uLightColors[i];
+                vec3 lightPosition = uLightPositions[i];
+                if (lightColor.r == 0.0 && lightColor.g == 0.0 && lightColor.b == 0.0)
+                    lightColor = vec3(1,1,1);
+                vec3 incident = normalize(vModelSpacePosition - lightPosition);
+                vec3 reflective = reflect(incident, normal);
+                float n1 = uAmbientRefractiveIndex;
+                if (n1 == 0.0)
+                    n1 = 1.0;
+                float cti = -dot(normal, incident);
+                if (cti < 0.0)
+                    continue; // this light is behind this face
+                float sti = sqrt(1.0 - cti*cti);
+                float R;
+                // Calculate reflectance using the Fresnel equations
+                // There is a way to do this in 8 muls but I'm too lazy :-)
+                if (uRefractiveIndex.Im == 0.0) { // simple case for non-conductors
+                    float n2 = uRefractiveIndex.Re;
+                    if (n2 == 0.0)
+                        n2 = 1.5; // good default for plasticky solids
+                    float stt = n1/n2*sti;
+                    float ctt = sqrt(1.0 - stt*stt);
+                    float a = n1*cti - n2*ctt;
+                    float b = n1*ctt - n2*cti;
+                    float c = n1*cti + n2*ctt;
+                    R = 0.5*(a*a + b*b)/(c*c);
+                } else {
+                    R = 0.0; // TODO
+                }
+                // For the gloss (or roughness), we assume a von Mises distribution of deflection angles from
+                // the principal reflection vector.  The k parameter of the distribution is such that k=0 implies
+                // perfectly even distribution (equivalent to a fully-diffuse surface), and as k -> ∞, the distribution
+                // tends towards the Dirac delta function (i.e. an infinite spike at 0).  The integral under the
+                // PDF is of course 1, so energy is conserved.  We can identify uGloss = 1 => k = ∞ and
+                // uGloss = 0 => k = 0
+                float S = 0.0;
+                vec3 cameraVec = normalize(uCameraPosition - vModelSpacePosition);
+                float cos_t = dot(cameraVec, reflective);
+                float k = 2.718/(1.0-uGloss)-2.718;
+                if (uGloss > 0.97)  // in theory, what happens here is all the light goes along the reflective vector.
+                    k = 87.882;     // in practice, this just overflows all the calculations
+                float I = modifiedBessel_0(k);
+                S = R * exp(k * cos_t) / (6.2831853 * I);
+                // So the energy from the incoming light is distributed as follows:
+                //   R - gets reflected off somewhere else
+                //   S - gets reflected into the camera
+                //   D - is emitted uniformly in all directions
+                // Therefore what reaches the camera is S + D/pi
+                // relative energies of colors used here: 0.30r + 0.59g + 0.11b based on YUV intensity model
+                // maximum total energy: 1/0.3 + 1/0.59 + 1/0.11 = 14.119157678479712378017462763225
+                float energyIncoming =
+                    (lightColor.r / 0.3 + lightColor.g / 0.59 + lightColor.b / 0.11) / 14.112;
+                float d = (1.0 - R) * energyIncoming;
+                float s = S * energyIncoming;
+                totalLight += d * textureColor.rgb + s * lightColor.rgb;
+            }
+            fragColor = vec4(totalLight.rgb, 1);
+        } else {
+            fragColor = textureColor;
+        }
+        gl_FragColor = fragColor;
     }
 }

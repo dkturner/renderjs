@@ -3,29 +3,21 @@
 var createRenderer = (function () {
 
 function Renderer(gl, width, height, resources) {
-    function render(time) {
+    function renderTimer(sysTime) {
         if (!renderer.running && !animationsInProgress)
             return;
         if (sysTime0 == undefined) {
-            sysTime0 = time;
+            sysTime0 = sysTime;
             renderTime0 = renderer.time;
         }
-        renderer.time = (time - sysTime0) / 1000 + renderTime0;
-        model.identity();
-        currentProgram.cameraMatrix = camera;
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        renderNodeList(currentProgram, rootNodes, time);
-        renderer.frameCount++;
-
-        requestAnimationFrame(render);
+        renderer.time = (sysTime - sysTime0) / 1000 + renderTime0;
+        render(renderer.time);
+        requestAnimationFrame(renderTimer);
     }
 
     function renderAt(time) {
         prepareRender();
-        model.identity();
-        currentProgram.cameraMatrix = camera;
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        renderNodeList(currentProgram, rootNodes, time);
+        render(time);
         renderer.frameCount++;
     }
 
@@ -36,6 +28,64 @@ function Renderer(gl, width, height, resources) {
         currentProgram.use();
         currentProgram.viewportMatrix = viewport;
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    function render(time) {
+        model.identity();
+        camera.push();
+        camera.invert();
+        currentProgram.cameraMatrix = camera;
+        camera.pop();
+        currentProgram.cameraPosition = camera.transform(0, 0, 0);
+        lights = gatherLights();
+        currentProgram.numberOfLights = lights.types.length;
+        currentProgram.lightPositions = lights.positions;
+        currentProgram.lightColors = lights.colors;
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        renderNodeList(currentProgram, rootNodes, time);
+        renderer.frameCount++;
+    }
+
+    var lightsMatrix = new MatrixStack();
+    function gatherLights() {
+        // TODO: occlusion
+        var types = [];
+        var positions = [];
+        var colors = [];
+        lightsMatrix.identity();
+        function addLights(data) {
+            if (data.transform && (data.lights || data.childrenWithLights)) {
+                lightsMatrix.push();
+                for (var i = 0; i < data.transform.length; ++ i)
+                    data.transform[i](lightsMatrix);
+            }
+            if (data.lights) {
+                for (var i = 0; i < data.lights.length; ++ i) {
+                    var light = data.lights[i];
+                    types.push(light.type);
+                    var pos = lightsMatrix.transform(light.position[0](), light.position[1](), light.position[2]());
+                    positions.push(pos[0]); positions.push(pos[1]); positions.push(pos[2]);
+                    if (light.color) {
+                        colors.push(light.color[0]()); colors.push(light.color[1]()); colors.push(light.color[2]());
+                    } else {
+                        colors.push(1.0); colors.push(1.0); colors.push(1.0);
+                    }
+                }
+            }
+            if (data.childrenWithLights) {
+                for (var i = 0; i < data.childrenWithLights.length; ++ i)
+                    addLights(data.childrenWithLights[i]);
+            }
+            if (data.transform && (data.lights || data.childrenWithLights))
+                lightsMatrix.pop();
+        }
+        for (var i = 0; i < rootNodes.length; ++ i)
+            addLights(getRenderData(rootNodes[i]));
+        return {
+            types: types,
+            positions: positions,
+            colors: colors
+        };
     }
 
     function createEvaluator(fArg) {
@@ -141,6 +191,10 @@ function Renderer(gl, width, height, resources) {
         gl.drawElements(gl.TRIANGLES, mesh.faceCount, gl.UNSIGNED_SHORT, 0);
     }
 
+    function getRenderData(node) {
+        return node.__renderData || (node.__renderData = createRenderData(node));
+    }
+
     function createRenderData(node) {
         var result = {};
         if (node.id)
@@ -186,14 +240,45 @@ function Renderer(gl, width, height, resources) {
                 result.transform = fn;
             }
         }
+        if (node.material) {
+            result.uniforms = result.uniforms || {};
+            for (var k in node.material)
+                result.uniforms[k] = createEvaluator(node.material[k]);
+        }
         if (node.flags) {
             result.flags = {};
+            result.uniforms = result.uniforms || {};
             for (var k in node.flags) {
                 var value = node.flags[k];
-                result.flags[k] = createEvaluator(value);
-                result.flags[k].passToShaders = (
-                    k == 'wireframe'
-                );
+                var evaluator = createEvaluator(value);
+                result.flags[k] = evaluator;
+                result.uniforms[k] = evaluator;
+            }
+        }
+        if (node.lights) {
+            result.lights = node.lights.map(function (light) {
+                var type = light.type;
+                if (type == 'point')
+                    type = 1;
+                return {
+                    type: type,
+                    position: [
+                        createEvaluator(light.position[0]),
+                        createEvaluator(light.position[1]),
+                        createEvaluator(light.position[2]),
+                    ],
+                    color: [
+                        createEvaluator(light.color[0]),
+                        createEvaluator(light.color[1]),
+                        createEvaluator(light.color[2]),
+                    ],
+                }
+            });
+            var d = result;
+            for (var p = node.parent; p && p.__renderData; p = p.parent) {
+                p.__renderData.childrenWithLights = p.__renderData.childrenWithLights || [];
+                p.__renderData.childrenWithLights.push(d);
+                d = p.__renderData;
             }
         }
         node.__renderData = result;
@@ -263,18 +348,18 @@ function Renderer(gl, width, height, resources) {
     }
 
     function renderEdges(program, node, data) {
-        var wasWireframe = program.flags.wireframe;
+        var wasWireframe = program.wireframe;
         if (!data.mesh.edgeList)
             data.mesh.edgeList = makeEdgeList(node.mesh);
-        program.flags.renderEdges = true;
+        program.renderEdges = true;
         program.vertexPosition = data.mesh.vertexBuffer;
         program.vertexNormal = data.mesh.normalBuffer;
         program.textureCoord = data.mesh.texCoords;
-        program.flags.wireframe = false;
+        program.wireframe = false;
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, data.mesh.edgeList);
         gl.drawElements(gl.LINES, data.mesh.faceCount*2, gl.UNSIGNED_SHORT, 0);
-        program.flags.renderEdges = false;
-        program.flags.wireframe = wasWireframe;
+        program.renderEdges = false;
+        program.wireframe = wasWireframe;
     }
 
     function renderNodeList(program, nodes, time) {
@@ -289,17 +374,15 @@ function Renderer(gl, width, height, resources) {
     }
 
     function renderNode(program, node, time) {
-        var data = node.__renderData || createRenderData(node);
-        var oldFlags = null;
+        var data = getRenderData(node);
+        var oldUniforms = null;
         var shouldRenderEdges = data.flags && data.flags.renderEdges && data.flags.renderEdges();
-        if (data.flags) {
-            oldFlags = {};
-            for (var k in data.flags) {
-                var evaluator = data.flags[k];
-                if (evaluator.passToShaders) {
-                    oldFlags[k] = program.flags[k];
-                    program.flags[k] = evaluator();
-                }
+        if (data.uniforms) {
+            oldUniforms = {};
+            for (var k in data.uniforms) {
+                var evaluator = data.uniforms[k];
+                oldUniforms[k] = program[k];
+                program[k] = evaluator();
             }
         }
         if (data.transform) {
@@ -308,24 +391,24 @@ function Renderer(gl, width, height, resources) {
         }
         if (data.mesh) {
             program.modelMatrix = model;
-            if (program.flags.wireframe) {
+            if (program.wireframe) {
                 if (shouldRenderEdges)
                     renderEdges(program, node, data);
                 beginWireframe();
             }
             data.mesh.draw(data.mesh, program);
-            if (program.flags.wireframe)
+            if (program.wireframe)
                 endWireframe();
         }
-        if (!program.flags.wireframe && shouldRenderEdges)
+        if (!program.wireframe && shouldRenderEdges)
             renderEdges(program, node, data);
         if (node.children)
             renderNodeList(program, node.children, time);
         if (data.transform)
             model.pop();
-        if (oldFlags) {
-            for (var k in oldFlags)
-                program.flags[k] = oldFlags[k];
+        if (oldUniforms) {
+            for (var k in oldUniforms)
+                program[k] = oldUniforms[k];
         }
     }
 
@@ -396,17 +479,22 @@ function Renderer(gl, width, height, resources) {
         return n;
     }
 
-    function createFramebuffer() {
+    function createFramebuffer(floatTexture) {
+        floatTexture = floatTexture && extensions.floatTexture;
         var fb = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
         fb.width = width;
         fb.height = height;
         var tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        if (floatTexture)
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.FLOAT, null);
+        else
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
         var ren = gl.createRenderbuffer();
         gl.bindRenderbuffer(gl.RENDERBUFFER, ren);
         gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, width, height);
@@ -437,7 +525,7 @@ function Renderer(gl, width, height, resources) {
         ready.then(function() {
             prepareRender();
             sysTime0 = undefined;
-            requestAnimationFrame(render);
+            requestAnimationFrame(renderTimer);
         }, orThrowError);
     }
 
@@ -559,9 +647,7 @@ function Renderer(gl, width, height, resources) {
     var textures = {};
     var renderFlags = {};
     var pendingResources = [];
-    var vertexPosition;
-    var vertexNormal;
-    var textureCoordinate;
+    var lights = [];
     var preprocessed;
     var standardProgram;
     var wireframePostprocProgram;
@@ -573,7 +659,12 @@ function Renderer(gl, width, height, resources) {
     var viewport = new MatrixStack();
 
     // Initialization
-    var extFragDepth = gl.getExtension('EXT_frag_depth');
+    var extensions = {
+        fragDepth: gl.getExtension('EXT_frag_depth'),
+        floatTexture: gl.getExtension('OES_texture_float'),
+        floatLinear: gl.getExtension('OES_float_linear'),
+        colorBufferFloat: gl.getExtension('WEBGL_color_buffer_float'),
+    }
     var ready = resources.all({
         'std-vertex.es2': resources.file,
         'std-fragment.es2': resources.file,
@@ -590,6 +681,12 @@ function Renderer(gl, width, height, resources) {
         standardProgram.registerUniformMatrix('modelMatrix');
         standardProgram.registerUniformMatrix('cameraMatrix');
         standardProgram.registerUniformMatrix('viewportMatrix');
+        standardProgram.registerUniformFloat3('cameraPosition');
+        standardProgram.registerUniformInt('numberOfLights');
+        standardProgram.registerUniformFloat3Array('lightPositions');
+        standardProgram.registerUniformFloat3Array('lightColors');
+        standardProgram.registerUniformComplex('refractiveIndex');
+        standardProgram.registerUniformFloat('gloss');
 
         wireframePostprocProgram = new Shader(gl, data['wfm-vertex.es2'], data['wfm-fragment.es2']);
         wireframePostprocProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 2);
@@ -606,9 +703,9 @@ function Renderer(gl, width, height, resources) {
         return true;
     });
 
-    preprocessed = createFramebuffer();
+    preprocessed = createFramebuffer(true);
     viewport.perspective(30, +width/+height, 1, 50);
-    camera.translate(0, 0, -10);
+    camera.translate(0, 0, 10);
 
     // Public interface
     this.time = 0; // in seconds
@@ -660,7 +757,7 @@ function Renderer(gl, width, height, resources) {
     }
     this.getLocalTransform = function (node) {
         var m = new MatrixStack();
-        var d = node.__renderData || (node.__renderData = createRenderData(node));
+        var d = getRenderData(node);
         if (d.transform)
             d.transform(m);
         return m;
@@ -671,7 +768,7 @@ function Renderer(gl, width, height, resources) {
             m = this.getTransform(node.parent);
         else
             m = new MatrixStack();
-        var d = node.__renderData || (node.__renderData = createRenderData(node));
+        var d = getRenderData(node);
         if (d.transform)
             d.transform(m);
         return m;

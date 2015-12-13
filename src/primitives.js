@@ -2,6 +2,21 @@
 
 var Primitives = (function () {
 
+function augment(obj, props) {
+    if (obj instanceof Array) {
+        if (!(props instanceof Array))
+            throw {error: 'expecting array object'};
+        return obj.concat(props);
+    }
+    for (var k in props) {
+        if (typeof obj[k] != 'object')
+            obj[k] = props[k];
+        else
+            obj[k] = augment(obj[k], props[k]);
+    }
+    return obj;
+}
+
 var ddX = 0.525731112119133606;
 var ddZ = 0.850650808352039932;
 var dodecVertices = [
@@ -18,7 +33,7 @@ var dodecFaces = [
 var mappings = Geometry.Maps;
 
 var Primitives = {
-    cube: function (options) {
+    cube: function (options, properties) {
         var texCoords;
         options = options || {};
         if (options.projection == 'square') {
@@ -40,7 +55,7 @@ var Primitives = {
                 [1.00,1.25], [1.25,1.00], [1.00,0.75], [0.75,1.00]
             ];
         }
-        return {
+        return augment({
             mesh: {
                 vertices: [
                     [-0.5,-0.5, 0.5], [ 0.5,-0.5, 0.5], [ 0.5, 0.5, 0.5], [-0.5, 0.5, 0.5], // front (+Z)
@@ -57,9 +72,9 @@ var Primitives = {
                     [12,13,14],[14,15,12], [16,17,18],[18,19,16], [20,21,22],[22,23,20]
                 ],
             }
-        }
+        }, properties);
     },
-    sphere: function (options) {
+    sphere: function (options, properties) {
         options = options || {};
         options.targetTriangles = options.targetTriangles || 320;
         options.projection = options.projection || mappings.HammerAitoff;
@@ -117,9 +132,9 @@ var Primitives = {
                 dodecVertices[dodecFaces[i][1]],
                 dodecVertices[dodecFaces[i][2]], 0);
         }
-        return {
+        return augment({
             mesh: mesh
-        };
+        }, properties);
     }
 };
 
