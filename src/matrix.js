@@ -1,4 +1,5 @@
 /* Matrix stack designed for WebGL use.
+ *
  * WebGL matrices are stored in column-major format, and so therefore ours are too.  This caught me out the first
  * time.  By convention most of the operations here are *right* multiplications, i.e. matrix.translate(x,y,z)
  * is equivalent to M_1 x M_t, where M_1 is the current matrix and M_t is the translation matrix.  The reason for
@@ -6,6 +7,13 @@
  * "most local" - a translate followed by a scale means "first size the object and then move it".  Given that
  * the transformation to clip space is P x C x M x v (P = perspective, C = camera, M = model, v = point), the first
  * operations to be applied are the ones on the right.
+ *
+ * The matrices are stored as 32-bit floats, and so the byte-indices are as follows:
+ *
+ *  /  0  16  32  48  \
+ *  |  4  20  36  52  |
+ *  |  8  24  40  56  |
+ *  \ 12  28  44  60  /
  */
 'use strict';
 
@@ -352,19 +360,19 @@ var MatrixStack = (function () {
             y = y / length;
             z = z / length;
             // col 1
-            data[(dst+ 0)>>2] = fround(x2 + (y2 + z2) * cos_t);
+            data[(dst+ 0)>>2] = fround(cos_t + x2*comp_t);
             data[(dst+ 4)>>2] = fround(x*y*comp_t + z*sin_t);
             data[(dst+ 8)>>2] = fround(x*z*comp_t - y*sin_t);
             data[(dst+12)>>2] = fround(0.0);
             // col 2
             data[(dst+16)>>2] = fround(x*y*comp_t - z*sin_t);
-            data[(dst+20)>>2] = fround(y2 + (x2 + z2) * cos_t);
+            data[(dst+20)>>2] = fround(cos_t + y2*comp_t);
             data[(dst+24)>>2] = fround(y*z*comp_t + x*sin_t);
             data[(dst+28)>>2] = fround(0.0);
             // col 3
             data[(dst+32)>>2] = fround(x*z*comp_t + y*sin_t);
             data[(dst+36)>>2] = fround(y*z*comp_t - x*sin_t);
-            data[(dst+40)>>2] = fround(z2 + (x2 + y2) * cos_t);
+            data[(dst+40)>>2] = fround(cos_t + z2*comp_t);
             data[(dst+44)>>2] = fround(0.0);
             // col 4
             data[(dst+48)>>2] = fround(0.0);
@@ -381,6 +389,81 @@ var MatrixStack = (function () {
             src = src<<6;
             for (; (i|0) < 64; i = ((i|0)+4)|0)
                 data[(dst+i)>>2] = fround(data[(src+i)>>2]);
+        }
+
+        function invert(dst, src) {
+            dst = dst|0;
+            src = src|0;
+            dst = dst<<6;
+            src = src<<6;
+            var invdet = 0.0, det = 0.0;
+            var s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0;
+            var c0 = 0.0, c1 = 0.0, c2 = 0.0, c3 = 0.0, c4 = 0.0, c5 = 0.0;
+
+            if (+data[(src+12)>>2] == 0.0 && +data[(src+28)>>2] == 0.0 && +data[(src+44)>>2] == 0.0) {
+                // Efficient special case for affine matrices, which is what we generally deal with.
+                //         A = [ M  b ]
+                //             [ 0  1 ]
+                //    inv(A) = [ inv(M)  -inv(M)b ]
+                //             [   0        1     ]
+                s0 = +data[(src+20)>>2]*+data[(src+40)>>2] - +data[(src+36)>>2]*+data[(src+24)>>2];
+                s1 = +data[(src+36)>>2]*+data[(src+ 8)>>2] - +data[(src+ 4)>>2]*+data[(src+40)>>2];
+                s2 = +data[(src+ 4)>>2]*+data[(src+24)>>2] - +data[(src+20)>>2]*+data[(src+ 8)>>2];
+                det = s0*+data[(src+ 0)>>2] + s1*+data[(src+16)>>2] + s2*+data[(src+32)>>2];
+                invdet = +1 / det;
+                // 3x3 col 1
+                data[(dst+ 0)>>2] = fround(s0 * invdet);
+                data[(dst+ 4)>>2] = fround(s1 * invdet);
+                data[(dst+ 8)>>2] = fround(s2 * invdet);
+                // 3x3 col 2
+                data[(dst+16)>>2] = fround((+data[(src+32)>>2]*+data[(src+24)>>2] - +data[(src+16)>>2]*+data[(src+40)>>2]) * invdet);
+                data[(dst+20)>>2] = fround((+data[(src+ 0)>>2]*+data[(src+40)>>2] - +data[(src+32)>>2]*+data[(src+ 8)>>2]) * invdet);
+                data[(dst+24)>>2] = fround((+data[(src+16)>>2]*+data[(src+ 8)>>2] - +data[(src+ 0)>>2]*+data[(src+24)>>2]) * invdet);
+                // 3x3 col 3
+                data[(dst+32)>>2] = fround((+data[(src+16)>>2]*+data[(src+36)>>2] - +data[(src+32)>>2]*+data[(src+20)>>2]) * invdet);
+                data[(dst+36)>>2] = fround((+data[(src+32)>>2]*+data[(src+ 4)>>2] - +data[(src+ 0)>>2]*+data[(src+36)>>2]) * invdet);
+                data[(dst+40)>>2] = fround((+data[(src+ 0)>>2]*+data[(src+20)>>2] - +data[(src+16)>>2]*+data[(src+ 4)>>2]) * invdet);
+                // the translation component, -inv(M) * b
+                data[(dst+48)>>2] = fround(-(+data[(dst+ 0)>>2]*+data[(src+48)>>2] + +data[(dst+16)>>2]*+data[(src+52)>>2] + +data[(dst+32)>>2]*+data[(src+56)>>2]));
+                data[(dst+52)>>2] = fround(-(+data[(dst+ 4)>>2]*+data[(src+48)>>2] + +data[(dst+20)>>2]*+data[(src+52)>>2] + +data[(dst+36)>>2]*+data[(src+56)>>2]));
+                data[(dst+56)>>2] = fround(-(+data[(dst+ 8)>>2]*+data[(src+48)>>2] + +data[(dst+24)>>2]*+data[(src+52)>>2] + +data[(dst+40)>>2]*+data[(src+56)>>2]));
+                // the bottom row
+                data[(dst+12)>>2] = fround(0.0);
+                data[(dst+28)>>2] = fround(0.0);
+                data[(dst+44)>>2] = fround(0.0);
+                data[(dst+60)>>2] = fround(1.0);
+            } else {
+                s0 = +data[(src+ 0)>>2]*+data[(src+20)>>2] - +data[(src+ 4)>>2]*+data[(src+16)>>2];
+                s1 = +data[(src+ 0)>>2]*+data[(src+36)>>2] - +data[(src+ 4)>>2]*+data[(src+32)>>2];
+                s2 = +data[(src+ 0)>>2]*+data[(src+52)>>2] - +data[(src+ 4)>>2]*+data[(src+48)>>2];
+                s3 = +data[(src+16)>>2]*+data[(src+36)>>2] - +data[(src+20)>>2]*+data[(src+32)>>2];
+                s4 = +data[(src+16)>>2]*+data[(src+52)>>2] - +data[(src+20)>>2]*+data[(src+48)>>2];
+                s5 = +data[(src+32)>>2]*+data[(src+52)>>2] - +data[(src+36)>>2]*+data[(src+48)>>2];
+                c5 = +data[(src+40)>>2]*+data[(src+60)>>2] - +data[(src+44)>>2]*+data[(src+56)>>2];
+                c4 = +data[(src+24)>>2]*+data[(src+60)>>2] - +data[(src+28)>>2]*+data[(src+56)>>2];
+                c3 = +data[(src+24)>>2]*+data[(src+44)>>2] - +data[(src+28)>>2]*+data[(src+40)>>2];
+                c2 = +data[(src+ 8)>>2]*+data[(src+60)>>2] - +data[(src+12)>>2]*+data[(src+56)>>2];
+                c1 = +data[(src+ 8)>>2]*+data[(src+44)>>2] - +data[(src+12)>>2]*+data[(src+40)>>2];
+                c0 = +data[(src+ 8)>>2]*+data[(src+28)>>2] - +data[(src+12)>>2]*+data[(src+24)>>2];
+                det = s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0;
+                invdet = +1/det;
+                data[(dst+ 0)>>2] = ( +data[(src+20)>>2]*c5 - +data[(src+36)>>2]*c4 + +data[(src+52)>>2]*c3) * invdet;
+                data[(dst+16)>>2] = (-+data[(src+16)>>2]*c5 + +data[(src+32)>>2]*c4 - +data[(src+48)>>2]*c3) * invdet;
+                data[(dst+32)>>2] = ( +data[(src+28)>>2]*s5 - +data[(src+44)>>2]*s4 + +data[(src+60)>>2]*s3) * invdet;
+                data[(dst+48)>>2] = (-+data[(src+24)>>2]*s5 + +data[(src+40)>>2]*s4 - +data[(src+56)>>2]*s3) * invdet;
+                data[(dst+ 4)>>2] = (-+data[(src+ 4)>>2]*c5 + +data[(src+36)>>2]*c2 - +data[(src+52)>>2]*c1) * invdet;
+                data[(dst+20)>>2] = ( +data[(src+ 0)>>2]*c5 - +data[(src+32)>>2]*c2 + +data[(src+48)>>2]*c1) * invdet;
+                data[(dst+36)>>2] = (-+data[(src+12)>>2]*s5 + +data[(src+44)>>2]*s2 - +data[(src+60)>>2]*s1) * invdet;
+                data[(dst+52)>>2] = ( +data[(src+ 8)>>2]*s5 - +data[(src+40)>>2]*s2 + +data[(src+56)>>2]*s1) * invdet;
+                data[(dst+ 8)>>2] = ( +data[(src+ 4)>>2]*c4 - +data[(src+20)>>2]*c2 + +data[(src+52)>>2]*c0) * invdet;
+                data[(dst+24)>>2] = (-+data[(src+ 0)>>2]*c4 + +data[(src+16)>>2]*c2 - +data[(src+48)>>2]*c0) * invdet;
+                data[(dst+40)>>2] = ( +data[(src+12)>>2]*s4 - +data[(src+28)>>2]*s2 + +data[(src+60)>>2]*s0) * invdet;
+                data[(dst+56)>>2] = (-+data[(src+ 8)>>2]*s4 + +data[(src+24)>>2]*s2 - +data[(src+56)>>2]*s0) * invdet;
+                data[(dst+12)>>2] = (-+data[(src+ 4)>>2]*c3 + +data[(src+20)>>2]*c1 - +data[(src+36)>>2]*c0) * invdet;
+                data[(dst+28)>>2] = ( +data[(src+ 0)>>2]*c3 - +data[(src+16)>>2]*c1 + +data[(src+32)>>2]*c0) * invdet;
+                data[(dst+44)>>2] = (-+data[(src+12)>>2]*s3 + +data[(src+28)>>2]*s1 - +data[(src+44)>>2]*s0) * invdet;
+                data[(dst+60)>>2] = ( +data[(src+ 8)>>2]*s3 - +data[(src+24)>>2]*s1 + +data[(src+40)>>2]*s0) * invdet;
+            }
         }
 
         function transform(index, x, y, z) {
@@ -410,13 +493,15 @@ var MatrixStack = (function () {
             lmul: lmul,
             rmul: rmul,
             copy: copy,
+            invert: invert,
             transform: transform
         }
     }
 
     function MatrixStack() {
-        var heap = new ArrayBuffer(65536);
-        var scratch = new Float32Array(heap, 0, 16);
+        var heapSize = 65536;
+        var heap = new ArrayBuffer(heapSize);
+        var data = new Float32Array(heap, 0, heapSize>>4);
         var asm = new Asm(window, null, heap);
         var count = 1;
         asm.identity(1);
@@ -438,26 +523,95 @@ var MatrixStack = (function () {
             asm.rmul(count, 0);
         }
         this.push = function () {
+            if ((count + 1) == (heapSize >> 6))
+                throw {error: 'too many matrices on stack'};
             asm.copy(count + 1, count);
             count++;
         }
         this.pop = function () {
+            if (count < 2)
+                throw {error:'nothing to pop'};
             count--;
         }
         this.mul = function () {
+            if (count < 2)
+                throw {error:'too few matrices on stack to multiply'};
             asm.rmul(count - 1, count);
             count--;
+        }
+        this.det = function () {
+            var i = count<<4;
+            var det1 = data[i+ 5]*data[i+10] - data[i+ 9]*data[i+ 6];
+            var det2 = data[i+ 1]*data[i+10] - data[i+ 2]*data[i+ 9];
+            var det3 = data[i+ 1]*data[i+ 6] - data[i+ 5]*data[i+ 2];
+            return det1*data[i+0] - det2*data[i+4] + det3*data[i+8];
         }
         this.transform = function (x, y, z) {
             if (y == undefined && z == undefined)
                 asm.transform(count, x[0], x[1], x[2]);
             else
                 asm.transform(count, x, y, z);
-            return [scratch[0], scratch[1], scratch[2]];
+            return [data[0], data[1], data[2]];
+        }
+        this.invert = function () {
+            asm.invert(0, count);
+            asm.copy(count, 0);
+        }
+        this.loadRowMajor = function (m) {
+            // Note that we load in ROW-MAJOR format, which is the more intuitive format for matrices described
+            // in code or textual data.
+            var i = count << 4;
+            if (m instanceof MatrixStack)
+                m = m.getRowMajor();
+            if (typeof m[0] == 'undefined')
+                m = arguments;
+            if (typeof m[0][0] != 'undefined') {
+                data[i+ 0] = m[0][0]; data[i+ 4] = m[0][1]; data[i+ 8] = m[0][2]; data[i+12] = m[0][3];
+                data[i+ 1] = m[1][0]; data[i+ 5] = m[1][1]; data[i+ 9] = m[1][2]; data[i+13] = m[1][3];
+                data[i+ 2] = m[2][0]; data[i+ 6] = m[2][1]; data[i+10] = m[2][2]; data[i+14] = m[2][3];
+                data[i+ 3] = m[3][0]; data[i+ 7] = m[3][1]; data[i+11] = m[3][2]; data[i+15] = m[3][3];
+            } else {
+                data[i+ 0] = m[ 0];   data[i+ 4] = m[ 1];   data[i+ 8] = m[ 2];   data[i+12] = m[ 3];
+                data[i+ 1] = m[ 4];   data[i+ 5] = m[ 5];   data[i+ 9] = m[ 6];   data[i+13] = m[ 7];
+                data[i+ 2] = m[ 8];   data[i+ 6] = m[ 9];   data[i+10] = m[10];   data[i+14] = m[11];
+                data[i+ 3] = m[12];   data[i+ 7] = m[13];   data[i+11] = m[14];   data[i+15] = m[15];
+            }
+        }
+        this.load = this.loadColMajor = function (m) {
+            var i = count << 4;
+            if (m instanceof MatrixStack)
+                m = m.getData();
+            if (typeof m[0] == 'undefined')
+                m = arguments;
+            if (typeof m[0][0] != 'undefined') {
+                data[i+ 0] = m[0][0]; data[i+ 4] = m[1][0]; data[i+ 8] = m[2][0]; data[i+12] = m[3][0];
+                data[i+ 1] = m[0][1]; data[i+ 5] = m[1][1]; data[i+ 9] = m[2][1]; data[i+13] = m[3][1];
+                data[i+ 2] = m[0][2]; data[i+ 6] = m[1][2]; data[i+10] = m[2][2]; data[i+14] = m[3][2];
+                data[i+ 3] = m[0][3]; data[i+ 7] = m[1][3]; data[i+11] = m[2][3]; data[i+15] = m[3][3];
+            } else {
+                data[i+ 0] = m[ 0];   data[i+ 4] = m[ 4];   data[i+ 8] = m[ 8];   data[i+12] = m[12];
+                data[i+ 1] = m[ 1];   data[i+ 5] = m[ 5];   data[i+ 9] = m[ 9];   data[i+13] = m[13];
+                data[i+ 2] = m[ 2];   data[i+ 6] = m[ 6];   data[i+10] = m[10];   data[i+14] = m[14];
+                data[i+ 3] = m[ 3];   data[i+ 7] = m[ 7];   data[i+11] = m[11];   data[i+15] = m[15];
+            }
         }
         this.getData = function() {
             return new Float32Array(heap, count<<6, 64>>2);
         }
+        this.getRowMajor = function () {
+            var i = count << 4;
+            return [
+                [ data[i+ 0], data[i+ 4], data[i+ 8], data[i+12] ],
+                [ data[i+ 1], data[i+ 5], data[i+ 9], data[i+13] ],
+                [ data[i+ 2], data[i+ 6], data[i+10], data[i+14] ],
+                [ data[i+ 3], data[i+ 7], data[i+11], data[i+15] ]
+            ];
+        }
+        Object.defineProperty(this, 'length', {
+            get: function () {
+                return count;
+            }
+        });
     }
 
     // IE shim, it doesn't appear to support asmjs anyway...

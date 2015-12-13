@@ -720,6 +720,7 @@ if (typeof window == 'undefined') {
         'matrix.js',
         'bezier.js',
         'geometry.js',
+        'resources.js',
         'parser.js',
         'shader.js',
         'renderer.js',

@@ -2,73 +2,6 @@
 
 var createRenderer = (function () {
 
-if (typeof Promise == 'undefined')
-    window.Promise = (function() {
-        // simple polyfill which is good enough for our purposes
-        function Promise(evaluator) {
-            function resolve(result) {
-                value = result;
-                promise.state = Promise.FULFILLED;
-                for (var i = 0; i < resolveCallbacks.length; ++ i)
-                    resolveCallbacks[i](result);
-                resolveCallbacks = rejectCallbacks = null;
-            }
-            function reject(result) {
-                value = result;
-                promise.state = Promise.REJECTED;
-                for (var i = 0; i < rejectCallbacks.length; ++ i)
-                    rejectCallbacks[i](result);
-                resolveCallbacks = rejectCallbacks = null;
-            }
-            var value;
-            var resolveCallbacks = [];
-            var rejectCallbacks = [];
-            var promise = this;
-            this.state = Promise.PENDING;
-            evaluator(resolve, reject);
-            this.then = function (onFulfill, onReject) {
-                return new Promise(function (nextResolve, nextReject) {
-                    if (promise.state == Promise.PENDING) {
-                        if (onFulfill)
-                            resolveCallbacks.push(function (result) { nextResolve(onFulfill(result)); });
-                        if (onReject)
-                            rejectCallbacks.push(function (result) { nextReject(onReject(result)); });
-                    } else if (promise.state == Promise.FULFILLED && onFulfill) {
-                        nextResolve(onFulfill(value));
-                    } else if (promise.state == Promise.REJECTED && onReject) {
-                        nextReject(onReject(value));
-                    }
-                });
-            }
-            // we don't define Promise.catch since it is a reserved work in IE, and the polyfill is targeted at IE,
-            // so really there is no point.
-        }
-        Promise.PENDING = 1;
-        Promise.FULFILLED = 2;
-        Promise.REJECTED = 3;
-        Promise.all = function (promiseArray) {
-            return new Promise(function (resolve, reject) {
-                function makeResolver(i, callback) {
-                    return function (result) {
-                        if (results) {
-                            results[i] = result;
-                            --outstanding;
-                            if (outstanding == 0)
-                                callback(results);
-                        }
-                    }
-                }
-                var outstanding = promiseArray.length;
-                var results = [];
-                for (var i = 0; i < promiseArray.length; ++ i)
-                    results.push(null);
-                for (var i = 0; i < promiseArray.length; ++ i)
-                    promiseArray[i].then(makeResolver(i, resolve), function (error) { results = null; reject(error); });
-            });
-        }
-        return Promise;
-    })();
-
 function Renderer(gl, width, height, resources) {
     function render(time) {
         if (!renderer.running && !animationsInProgress)
@@ -81,7 +14,7 @@ function Renderer(gl, width, height, resources) {
         model.identity();
         currentProgram.cameraMatrix = camera;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        renderSubnodes(currentProgram, nodes, time);
+        renderNodeList(currentProgram, rootNodes, time);
         renderer.frameCount++;
 
         requestAnimationFrame(render);
@@ -92,7 +25,7 @@ function Renderer(gl, width, height, resources) {
         model.identity();
         currentProgram.cameraMatrix = camera;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        renderSubnodes(currentProgram, nodes, time);
+        renderNodeList(currentProgram, rootNodes, time);
         renderer.frameCount++;
     }
 
@@ -131,7 +64,44 @@ function Renderer(gl, width, height, resources) {
         };
     }
 
+    function bind(f, arg1) {
+        return function() {
+            var args = [arg1];
+            for (var i = 0; i < arguments.length; ++ i)
+                args.push(arguments[i]);
+            f.apply(this, args);
+        }
+    }
+
     function createTransformFunction(transform) {
+        if (typeof transform == 'string') {
+            if (transform.length == 0)
+                return function () { };
+            if (transform[0] == '#') {
+                var nodeId = transform.substring(1);
+                return bind(function (nodeId, m) {
+                    var node = nodesById[nodeId];
+                    if (node) {
+                        var x = renderer.getTransform(node);
+                        m.push();
+                        m.load(x);
+                        m.mul();
+                    }
+                }, nodeId);
+            } else {
+                var paramName = transform;
+                return bind(function (paramName, m) {
+                    var value = renderer.parameters[paramName];
+                    if (value) {
+                        if (typeof value == 'function')
+                            value = value(renderer.time);
+                        m.push();
+                        m.load(value);
+                        m.mul();
+                    }
+                }, paramName);
+            }
+        }
         if (transform[0] == 'rotate') {
             var angle = createEvaluator(transform[1]);
             var x = createEvaluator(transform[2]);
@@ -173,6 +143,8 @@ function Renderer(gl, width, height, resources) {
 
     function createRenderData(node) {
         var result = {};
+        if (node.id)
+            nodesById[node.id] = node;
         if (node.mesh) {
             result.mesh = {};
             result.mesh.vertexBuffer = unpackBuffer(node.mesh.vertices, 3);
@@ -200,15 +172,19 @@ function Renderer(gl, width, height, resources) {
             }
         }
         if (node.transform) {
-            var fn = undefined;
-            for (var i = 0; i < node.transform.length; ++ i) {
-                var fn2 = createTransformFunction(node.transform[i]);
-                if (fn)
-                    fn = compose(fn, fn2);
-                else
-                    fn = fn2;
+            if (typeof node.transform == 'string') {
+                result.transform = createTransformFunction(node.transform);
+            } else {
+                var fn = undefined;
+                for (var i = 0; i < node.transform.length; ++ i) {
+                    var fn2 = createTransformFunction(node.transform[i]);
+                    if (fn)
+                        fn = compose(fn, fn2);
+                    else
+                        fn = fn2;
+                }
+                result.transform = fn;
             }
-            result.transform = fn;
         }
         if (node.flags) {
             result.flags = {};
@@ -230,6 +206,8 @@ function Renderer(gl, width, height, resources) {
 
     function releaseRenderData(node) {
         var data = node.__renderData;
+        if (node.id && nodesById[node.id] === node)
+            delete nodesById[node.id];
         if (data) {
             if (data.mesh) {
                 gl.deleteBuffer(data.mesh.vertexBuffer);
@@ -299,7 +277,7 @@ function Renderer(gl, width, height, resources) {
         program.flags.wireframe = wasWireframe;
     }
 
-    function renderSubnodes(program, nodes, time) {
+    function renderNodeList(program, nodes, time) {
         for (var i = 0; i < nodes.length; ++ i) {
             if (!nodes[i].flags || !nodes[i].flags.wireframe)  // TODO: this should use the evaluated version
                 renderNode(program, nodes[i], time);
@@ -342,7 +320,7 @@ function Renderer(gl, width, height, resources) {
         if (!program.flags.wireframe && shouldRenderEdges)
             renderEdges(program, node, data);
         if (node.children)
-            renderSubnodes(program, node.children, time);
+            renderNodeList(program, node.children, time);
         if (data.transform)
             model.pop();
         if (oldFlags) {
@@ -576,7 +554,8 @@ function Renderer(gl, width, height, resources) {
     this.gl = gl;
     this.resources = resources;
     var sysTime0, renderTime0;
-    var nodes = [];
+    var rootNodes = [];
+    var nodesById = {};
     var textures = {};
     var renderFlags = {};
     var pendingResources = [];
@@ -651,14 +630,21 @@ function Renderer(gl, width, height, resources) {
             renderAt(time);
         }, orThrowError);
     }
-    this.addNode = function (node) {
-        nodes.push(node);
+    this.addNode = function (node, parent) {
+        if (typeof parent != 'undefined')
+            (parent.children = parent.children || []).push(node);
+        else
+            rootNodes.push(node);
+        node.parent = parent;
         createRenderData(node);
     }
     this.removeNode = function (node) {
-        var idx = nodes.indexOf(node);
+        var container = rootNodes;
+        if (node.parent)
+            container = node.parent;
+        var idx = container.indexOf(node);
         if (idx >= 0) {
-            nodes.splice(idx, 1);
+            container.splice(idx, 1);
             releaseRenderData(node);
         }
     }
@@ -672,116 +658,53 @@ function Renderer(gl, width, height, resources) {
                 node.__renderData.mesh.texture = tex;
         });
     }
-}
-
-function combinePath(base, path) {
-    if (path.substring(0, 1) == '/' || path.indexOf('://') >= 0 || path.substring(0, 5) == 'data:')
-        return path;
-    if (base.length > 0 && base.substring(base.length - 1, 0) != '/')
-        return base + '/' + path;
-    return base + path;
-}
-
-function Resources(resourcePath) {
-    resourcePath = resourcePath || '';
-    var self = this;
-    var pendingResources = [];
-    this.resourcePath = resourcePath;
-    this.createCache = function(type, factory) {
-        var cache = {};
-        this[type] = function (arg) {
-            return new Promise(function (resolve, reject) {
-                var cached = cache[arg];
-                if (cached != undefined) {
-                    resolve(cached);
-                } else {
-                    try {
-                        var result = factory(arg);
-                        if (result instanceof Promise || typeof result.then == 'function') {
-                            pendingResources.push(result);
-                            if (pendingResources.length == 1)
-                                self.onresourcesloading();
-                            result.then(function (value) {
-                                cache[arg] = value;
-                                pendingResources.splice(pendingResources.indexOf(result), 1);
-                                if (pendingResources.length == 0)
-                                    self.onresourcesloaded();
-                                resolve(value);
-                            }, reject);
-                        } else {
-                            cache[arg] = result;
-                            resolve(result);
-                        }
-                    } catch (error) {
-                        reject(error);
-                    }
-                }
-            });
-        };
-        this[type].set = function (src, data) {
-            cache[src] = data;
-        }
+    this.getLocalTransform = function (node) {
+        var m = new MatrixStack();
+        var d = node.__renderData || (node.__renderData = createRenderData(node));
+        if (d.transform)
+            d.transform(m);
+        return m;
     }
-    this.all = function (resourceMap) {
-        var promiseArray = [];
-        for (var key in resourceMap) {
-            var value = resourceMap[key];
-            if (typeof value == 'function')
-                promiseArray.push(value(key));
-            else
-                promiseArray.push(value);
-        }
-        return Promise.all(promiseArray).then(function (resourceArray) {
-            var valueMap = {};
-            var i = 0;
-            for (key in resourceMap)
-                valueMap[key] = resourceArray[i++];
-            return valueMap;
-        });
+    this.getTransform = function (node) {
+        var m;
+        if (node.parent)
+            m = this.getTransform(node.parent);
+        else
+            m = new MatrixStack();
+        var d = node.__renderData || (node.__renderData = createRenderData(node));
+        if (d.transform)
+            d.transform(m);
+        return m;
     }
-    Object.defineProperty(this, 'pendingResourceCount', {
-        get: function () {
-            return this.pendingResources.length;
-        }
-    });
-    this.createCache('image', function (url) {
-        return new Promise(function (resolve, reject) {
-            var img = new Image();
-            img.onload = function() { resolve(img); };
-            img.onerror = reject;
-            img.src = combinePath(self.resourcePath, url);
-        });
-    });
-    this.createCache('file', function (url) {
-        return $.get(combinePath(self.resourcePath, url));
-    });
-    this.onresourcesloading =
-    this.onresourcesloaded = function () {};
 }
 
 function createRenderer(canvas, resourcePath) {
     return new Promise(function (resolve, reject) {
-        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (!gl)
-            return reject('no webgl');
-        var resources = new Resources(resourcePath);
-        // the comment below is used by the build system
-        //!EMBED resources: loadingtexture.jpg, std-vertex.es2, std-fragment.es2, wfm-vertex.es2, wfm-fragment.es2
-        resources.all({
-            'loadingtexture.jpg': resources.image,
-            'std-vertex.es2': resources.file,
-            'std-fragment.es2': resources.file,
-            'wfm-vertex.es2': resources.file,
-            'wfm-fragment.es2': resources.file,
-        }).then(function(preloaded) {
-            try {
-                var renderer = new Renderer(gl, canvas.width, canvas.height, resources);
-                canvas.__renderjs = renderer;
-                resolve(renderer);
-            } catch (error) {
-                reject(error);
-            }
-        });
+        try {
+            var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl)
+                return reject('no webgl');
+            var resources = new Resources(resourcePath);
+            // the comment below is used by the build system
+            //!EMBED resources: loadingtexture.jpg, std-vertex.es2, std-fragment.es2, wfm-vertex.es2, wfm-fragment.es2
+            resources.all({
+                'loadingtexture.jpg': resources.image,
+                'std-vertex.es2': resources.file,
+                'std-fragment.es2': resources.file,
+                'wfm-vertex.es2': resources.file,
+                'wfm-fragment.es2': resources.file,
+            }).then(function(preloaded) {
+                try {
+                    var renderer = new Renderer(gl, canvas.width, canvas.height, resources);
+                    canvas.__renderjs = renderer;
+                    resolve(renderer);
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        } catch (error) {
+            reject(error);
+        }
     });
 }
 
