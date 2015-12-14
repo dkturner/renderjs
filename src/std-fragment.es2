@@ -2,6 +2,11 @@ precision highp float;
 
 const int MAX_LIGHTS = 100;
 
+struct Complex {
+    float Re;
+    float Im;
+};
+
 uniform sampler2D uSampler0;
 uniform bool uWireframe;
 uniform bool uRenderEdges;
@@ -10,12 +15,7 @@ uniform vec3 uCameraPosition;
 uniform int uNumberOfLights;
 uniform vec3 uLightPositions[MAX_LIGHTS];
 uniform vec3 uLightColors[MAX_LIGHTS];
-
-uniform struct Complex {
-    float Re;
-    float Im;
-} uRefractiveIndex;
-
+uniform Complex uRefractiveIndex;
 uniform float uAmbientRefractiveIndex;
 uniform float uGloss;
 
@@ -75,10 +75,11 @@ void main(void) {
                     continue; // this light is behind this face
                 float sti = sqrt(1.0 - cti*cti);
                 float R;
+                R = uRefractiveIndex.Re;
                 // Calculate reflectance using the Fresnel equations
                 // There is a way to do this in 8 muls but I'm too lazy :-)
                 if (uRefractiveIndex.Im == 0.0) { // simple case for non-conductors
-                    float n2 = uRefractiveIndex.Re;
+                   float n2 = uRefractiveIndex.Re;
                     if (n2 == 0.0)
                         n2 = 1.5; // good default for plasticky solids
                     float stt = n1/n2*sti;

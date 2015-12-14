@@ -340,6 +340,8 @@ function minify(source, output, options) {
             var brackets = requireBrackets();
             if (brackets)
                 output('(');
+            else if (node.operator == '+')
+                output(' ');
             var isText = node.operator == 'delete' || node.operator == 'typeof';
             if (node.prefix) {
                 if (!isText && !brackets && symbolicOperator && !leftHandSide && context() == 'BinaryExpression')

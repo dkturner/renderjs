@@ -194,6 +194,8 @@ function Shader(gl, vertexProgram, fragmentProgram) {
                 },
                 set: function (newValue) {
                     value = newValue;
+                    if (value.length == 0)
+                        return value;
                     if (typeof value[0][0] != 'undefined') {
                         var array = new Float32Array(3*value.length);
                         var j = 0;

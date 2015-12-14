@@ -394,13 +394,13 @@ var MatrixStack = (function () {
         function invert(dst, src) {
             dst = dst|0;
             src = src|0;
-            dst = dst<<6;
-            src = src<<6;
             var invdet = 0.0, det = 0.0;
             var s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0;
             var c0 = 0.0, c1 = 0.0, c2 = 0.0, c3 = 0.0, c4 = 0.0, c5 = 0.0;
+            dst = dst<<6;
+            src = src<<6;
 
-            if (+data[(src+12)>>2] == 0.0 && +data[(src+28)>>2] == 0.0 && +data[(src+44)>>2] == 0.0) {
+            if (+data[(src+12)>>2] == 0.0) if (+data[(src+28)>>2] == 0.0) if (+data[(src+44)>>2] == 0.0) {
                 // Efficient special case for affine matrices, which is what we generally deal with.
                 //         A = [ M  b ]
                 //             [ 0  1 ]
@@ -432,38 +432,38 @@ var MatrixStack = (function () {
                 data[(dst+28)>>2] = fround(0.0);
                 data[(dst+44)>>2] = fround(0.0);
                 data[(dst+60)>>2] = fround(1.0);
-            } else {
-                s0 = +data[(src+ 0)>>2]*+data[(src+20)>>2] - +data[(src+ 4)>>2]*+data[(src+16)>>2];
-                s1 = +data[(src+ 0)>>2]*+data[(src+36)>>2] - +data[(src+ 4)>>2]*+data[(src+32)>>2];
-                s2 = +data[(src+ 0)>>2]*+data[(src+52)>>2] - +data[(src+ 4)>>2]*+data[(src+48)>>2];
-                s3 = +data[(src+16)>>2]*+data[(src+36)>>2] - +data[(src+20)>>2]*+data[(src+32)>>2];
-                s4 = +data[(src+16)>>2]*+data[(src+52)>>2] - +data[(src+20)>>2]*+data[(src+48)>>2];
-                s5 = +data[(src+32)>>2]*+data[(src+52)>>2] - +data[(src+36)>>2]*+data[(src+48)>>2];
-                c5 = +data[(src+40)>>2]*+data[(src+60)>>2] - +data[(src+44)>>2]*+data[(src+56)>>2];
-                c4 = +data[(src+24)>>2]*+data[(src+60)>>2] - +data[(src+28)>>2]*+data[(src+56)>>2];
-                c3 = +data[(src+24)>>2]*+data[(src+44)>>2] - +data[(src+28)>>2]*+data[(src+40)>>2];
-                c2 = +data[(src+ 8)>>2]*+data[(src+60)>>2] - +data[(src+12)>>2]*+data[(src+56)>>2];
-                c1 = +data[(src+ 8)>>2]*+data[(src+44)>>2] - +data[(src+12)>>2]*+data[(src+40)>>2];
-                c0 = +data[(src+ 8)>>2]*+data[(src+28)>>2] - +data[(src+12)>>2]*+data[(src+24)>>2];
-                det = s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0;
-                invdet = +1/det;
-                data[(dst+ 0)>>2] = ( +data[(src+20)>>2]*c5 - +data[(src+36)>>2]*c4 + +data[(src+52)>>2]*c3) * invdet;
-                data[(dst+16)>>2] = (-+data[(src+16)>>2]*c5 + +data[(src+32)>>2]*c4 - +data[(src+48)>>2]*c3) * invdet;
-                data[(dst+32)>>2] = ( +data[(src+28)>>2]*s5 - +data[(src+44)>>2]*s4 + +data[(src+60)>>2]*s3) * invdet;
-                data[(dst+48)>>2] = (-+data[(src+24)>>2]*s5 + +data[(src+40)>>2]*s4 - +data[(src+56)>>2]*s3) * invdet;
-                data[(dst+ 4)>>2] = (-+data[(src+ 4)>>2]*c5 + +data[(src+36)>>2]*c2 - +data[(src+52)>>2]*c1) * invdet;
-                data[(dst+20)>>2] = ( +data[(src+ 0)>>2]*c5 - +data[(src+32)>>2]*c2 + +data[(src+48)>>2]*c1) * invdet;
-                data[(dst+36)>>2] = (-+data[(src+12)>>2]*s5 + +data[(src+44)>>2]*s2 - +data[(src+60)>>2]*s1) * invdet;
-                data[(dst+52)>>2] = ( +data[(src+ 8)>>2]*s5 - +data[(src+40)>>2]*s2 + +data[(src+56)>>2]*s1) * invdet;
-                data[(dst+ 8)>>2] = ( +data[(src+ 4)>>2]*c4 - +data[(src+20)>>2]*c2 + +data[(src+52)>>2]*c0) * invdet;
-                data[(dst+24)>>2] = (-+data[(src+ 0)>>2]*c4 + +data[(src+16)>>2]*c2 - +data[(src+48)>>2]*c0) * invdet;
-                data[(dst+40)>>2] = ( +data[(src+12)>>2]*s4 - +data[(src+28)>>2]*s2 + +data[(src+60)>>2]*s0) * invdet;
-                data[(dst+56)>>2] = (-+data[(src+ 8)>>2]*s4 + +data[(src+24)>>2]*s2 - +data[(src+56)>>2]*s0) * invdet;
-                data[(dst+12)>>2] = (-+data[(src+ 4)>>2]*c3 + +data[(src+20)>>2]*c1 - +data[(src+36)>>2]*c0) * invdet;
-                data[(dst+28)>>2] = ( +data[(src+ 0)>>2]*c3 - +data[(src+16)>>2]*c1 + +data[(src+32)>>2]*c0) * invdet;
-                data[(dst+44)>>2] = (-+data[(src+12)>>2]*s3 + +data[(src+28)>>2]*s1 - +data[(src+44)>>2]*s0) * invdet;
-                data[(dst+60)>>2] = ( +data[(src+ 8)>>2]*s3 - +data[(src+24)>>2]*s1 + +data[(src+40)>>2]*s0) * invdet;
+                return;
             }
+            s0 = +data[(src+ 0)>>2]*+data[(src+20)>>2] - +data[(src+ 4)>>2]*+data[(src+16)>>2];
+            s1 = +data[(src+ 0)>>2]*+data[(src+36)>>2] - +data[(src+ 4)>>2]*+data[(src+32)>>2];
+            s2 = +data[(src+ 0)>>2]*+data[(src+52)>>2] - +data[(src+ 4)>>2]*+data[(src+48)>>2];
+            s3 = +data[(src+16)>>2]*+data[(src+36)>>2] - +data[(src+20)>>2]*+data[(src+32)>>2];
+            s4 = +data[(src+16)>>2]*+data[(src+52)>>2] - +data[(src+20)>>2]*+data[(src+48)>>2];
+            s5 = +data[(src+32)>>2]*+data[(src+52)>>2] - +data[(src+36)>>2]*+data[(src+48)>>2];
+            c5 = +data[(src+40)>>2]*+data[(src+60)>>2] - +data[(src+44)>>2]*+data[(src+56)>>2];
+            c4 = +data[(src+24)>>2]*+data[(src+60)>>2] - +data[(src+28)>>2]*+data[(src+56)>>2];
+            c3 = +data[(src+24)>>2]*+data[(src+44)>>2] - +data[(src+28)>>2]*+data[(src+40)>>2];
+            c2 = +data[(src+ 8)>>2]*+data[(src+60)>>2] - +data[(src+12)>>2]*+data[(src+56)>>2];
+            c1 = +data[(src+ 8)>>2]*+data[(src+44)>>2] - +data[(src+12)>>2]*+data[(src+40)>>2];
+            c0 = +data[(src+ 8)>>2]*+data[(src+28)>>2] - +data[(src+12)>>2]*+data[(src+24)>>2];
+            det = s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0;
+            invdet = +1/det;
+            data[(dst+ 0)>>2] = ( +data[(src+20)>>2]*c5 - +data[(src+36)>>2]*c4 + +data[(src+52)>>2]*c3) * invdet;
+            data[(dst+16)>>2] = (-+data[(src+16)>>2]*c5 + +data[(src+32)>>2]*c4 - +data[(src+48)>>2]*c3) * invdet;
+            data[(dst+32)>>2] = ( +data[(src+28)>>2]*s5 - +data[(src+44)>>2]*s4 + +data[(src+60)>>2]*s3) * invdet;
+            data[(dst+48)>>2] = (-+data[(src+24)>>2]*s5 + +data[(src+40)>>2]*s4 - +data[(src+56)>>2]*s3) * invdet;
+            data[(dst+ 4)>>2] = (-+data[(src+ 4)>>2]*c5 + +data[(src+36)>>2]*c2 - +data[(src+52)>>2]*c1) * invdet;
+            data[(dst+20)>>2] = ( +data[(src+ 0)>>2]*c5 - +data[(src+32)>>2]*c2 + +data[(src+48)>>2]*c1) * invdet;
+            data[(dst+36)>>2] = (-+data[(src+12)>>2]*s5 + +data[(src+44)>>2]*s2 - +data[(src+60)>>2]*s1) * invdet;
+            data[(dst+52)>>2] = ( +data[(src+ 8)>>2]*s5 - +data[(src+40)>>2]*s2 + +data[(src+56)>>2]*s1) * invdet;
+            data[(dst+ 8)>>2] = ( +data[(src+ 4)>>2]*c4 - +data[(src+20)>>2]*c2 + +data[(src+52)>>2]*c0) * invdet;
+            data[(dst+24)>>2] = (-+data[(src+ 0)>>2]*c4 + +data[(src+16)>>2]*c2 - +data[(src+48)>>2]*c0) * invdet;
+            data[(dst+40)>>2] = ( +data[(src+12)>>2]*s4 - +data[(src+28)>>2]*s2 + +data[(src+60)>>2]*s0) * invdet;
+            data[(dst+56)>>2] = (-+data[(src+ 8)>>2]*s4 + +data[(src+24)>>2]*s2 - +data[(src+56)>>2]*s0) * invdet;
+            data[(dst+12)>>2] = (-+data[(src+ 4)>>2]*c3 + +data[(src+20)>>2]*c1 - +data[(src+36)>>2]*c0) * invdet;
+            data[(dst+28)>>2] = ( +data[(src+ 0)>>2]*c3 - +data[(src+16)>>2]*c1 + +data[(src+32)>>2]*c0) * invdet;
+            data[(dst+44)>>2] = (-+data[(src+12)>>2]*s3 + +data[(src+28)>>2]*s1 - +data[(src+44)>>2]*s0) * invdet;
+            data[(dst+60)>>2] = ( +data[(src+ 8)>>2]*s3 - +data[(src+24)>>2]*s1 + +data[(src+40)>>2]*s0) * invdet;
         }
 
         function transform(index, x, y, z) {
