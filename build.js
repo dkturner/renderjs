@@ -340,6 +340,8 @@ function minify(source, output, options) {
             var brackets = requireBrackets();
             if (brackets)
                 output('(');
+            else if (node.operator == '+')
+                output(' ');
             var isText = node.operator == 'delete' || node.operator == 'typeof';
             if (node.prefix) {
                 if (!isText && !brackets && symbolicOperator && !leftHandSide && context() == 'BinaryExpression')
@@ -641,7 +643,7 @@ if (typeof window == 'undefined') {
         }
 
         function injectResources(source) {
-            return Promise.resolve(source.replace(/\/\/!([A-Z]+)\s+(.*)/g, function (_, command, arguments) {
+            return Promise.resolve(source.replace(/\/\/!([A-Z]+)\s+(.*)$/gm, function (_, command, arguments) {
                 if (command == 'EMBED') {
                     var fileListIndex = arguments.indexOf(':');
                     var resourcePack = arguments.substring(0, fileListIndex);
@@ -720,6 +722,7 @@ if (typeof window == 'undefined') {
         'matrix.js',
         'bezier.js',
         'geometry.js',
+        'resources.js',
         'parser.js',
         'shader.js',
         'renderer.js',

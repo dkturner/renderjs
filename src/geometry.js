@@ -75,9 +75,73 @@ var Geometry = (function () {
             this.x * other.y - this.y * other.x);
     }
 
-    function Rotation(angle, x, y, z) {
-        this.angle = +(angle || 0);
-        this.axis = new Vector3(x, y, z);
+    function Complex(re, im) {
+        if (typeof re != 'undefined' && (re instanceof Complex || re.length == 2)) {
+            this.re = re[0];
+            this.im = re[1];
+        } else {
+            this.re = +(re || 0);
+            this.im = +(im || 0);
+        }
+    }
+    Object.defineProperty(Complex.prototype, '0', { get: function() { return this.re; } });
+    Object.defineProperty(Complex.prototype, '1', { get: function() { return this.im; } });
+    Complex.add = function (a, b) {
+        if (a instanceof Complex) {
+            if (b instanceof Complex)
+                return new Complex(a.re + b.re, a.im + b.im);
+            else
+                return new Complex(a.re + b, a.im);
+        } else {
+            if (b instanceof Complex)
+                return new Complex(a + b.re, b.im);
+            else
+                return new Complex(a + b, 0);
+        }
+    }
+    Complex.sub = function (a, b) {
+        if (a instanceof Complex) {
+            if (b instanceof Complex)
+                return new Complex(a.re - b.re, a.im - b.im);
+            else
+                return new Complex(a.re - b, a.im);
+        } else {
+            if (b instanceof Complex)
+                return new Complex(a - b.re, b.im);
+            else
+                return new Complex(a - b, 0);
+        }
+    }
+    Complex.mul = function (a, b) {
+        if (a instanceof Complex) {
+            if (b instanceof Complex)
+                return new Complex(a.re*b.re - a.im*b.im, a.re*b.im + a.im*b.re);
+            else
+                return new Complex(a.re * b, a.im * b);
+        } else {
+            if (b instanceof Complex)
+                return new Complex(a * b.re, a * b.im);
+            else
+                return new Complex(a * b, 0);
+        }
+    }
+    Complex.div = function (a, b) {
+        if (a instanceof Complex) {
+            if (b instanceof Complex) {
+                // a / b === ab* / bb*, and bb* is the square of the magnitude which is always real
+                var invmag =  1.0 / (b.re*b.re + b.im*b.im);
+                return new Complex((a.re*b.re + a.im*b.im) * invmag, (a.im*b.re - a.re*b.im) * invmag);
+            } else {
+                return new Complex(a.re / b, a.im / b);
+            }
+        } else {
+            if (b instanceof Complex) {
+                var invmag = 1.0 / (b.re*b.re + b.im*b.im);
+                return new Complex(a*b.re * invmag, -a * b.im * invmag);
+            } else {
+                return new Complex(a / b, 0);
+            }
+        }
     }
 
     function sameSign() {
@@ -257,6 +321,7 @@ var Geometry = (function () {
 
     return {
         Vector3: Vector3,
-        Maps: Maps
+        Maps: Maps,
+        Complex: Complex
     }
 })();

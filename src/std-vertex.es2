@@ -13,12 +13,26 @@ varying lowp vec4 vColor;
 varying highp vec2 vTextureCoord;
 varying highp float vNormalizedDepth;
 varying highp vec4 vPosition;
+varying highp vec3 vModelSpacePosition;
+varying highp vec3 vCamSpacePosition;
+varying highp vec3 vNormal;
 
 void main(void) {
-    vec4 cameraSpace = uCameraMatrix * uModelMatrix * vec4(aVertexPosition, 1.0);
+    vec4 modelSpace = uModelMatrix * vec4(aVertexPosition, 1.0);
+    vec4 cameraSpace = uCameraMatrix * modelSpace;
     vec4 clipSpace = uViewportMatrix * cameraSpace;
     gl_Position = clipSpace;
     vPosition = clipSpace;
+    vCamSpacePosition = cameraSpace.xyz / cameraSpace.w;
+    vModelSpacePosition = modelSpace.xyz / modelSpace.w;
+    // Actually the calculation below is not correct, see the discussion at
+    // http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/
+    // Also, irritatingly, WebGL doesn't support the inverse() function.  And calculating
+    // the inverse in Javascript for each mesh is likely to be slow.  So I'm sticking with
+    // this until I can implement an inverse function in GLSL.  Hopefully the GPU compiler
+    // will be good enough to optimize this out of the vertex pipeline.
+    vec4 normal4 = uModelMatrix * vec4(aVertexNormal, 0.0);
+    vNormal = normal4.xyz;
     if (uWireframe) {
         // calculate the near and far planes in camera space
         vec4 f_ = vec4(0,0,1,-1) * uViewportMatrix;

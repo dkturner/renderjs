@@ -29,7 +29,6 @@ function Shader(gl, vertexProgram, fragmentProgram) {
     gl.linkProgram(program);
 
     this.glProgram = program;
-    this.flags = {};
 
     this.use = function () {
         gl.useProgram(this.glProgram);
@@ -39,7 +38,7 @@ function Shader(gl, vertexProgram, fragmentProgram) {
         var loc = gl.getUniformLocation(program, makeUniformName(name));
         var bValue = initValue;
         if (loc) {
-            Object.defineProperty(this.flags, name, {
+            Object.defineProperty(this, name, {
                 get: function () {
                     return bValue;
                 },
@@ -92,6 +91,123 @@ function Shader(gl, vertexProgram, fragmentProgram) {
                 set: function (newValue) {
                     value = newValue;
                     gl.uniformMatrix4fv(loc, false, value.getData());
+                    return value;
+                }
+            });
+        } else {
+            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+        }
+    }
+
+    this.registerUniformInt = function (name) {
+        var loc = gl.getUniformLocation(program, makeUniformName(name));
+        var value;
+        if (loc) {
+            Object.defineProperty(this, name, {
+                get: function () {
+                    return value;
+                },
+                set: function (newValue) {
+                    value = newValue;
+                    gl.uniform1i(loc, value);
+                    return value;
+                }
+            });
+        } else {
+            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+        }
+    }
+
+    this.registerUniformFloat = function (name) {
+        var loc = gl.getUniformLocation(program, makeUniformName(name));
+        var value;
+        if (loc) {
+            Object.defineProperty(this, name, {
+                get: function () {
+                    return value;
+                },
+                set: function (newValue) {
+                    value = newValue;
+                    gl.uniform1f(loc, value);
+                    return value;
+                }
+            });
+        } else {
+            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+        }
+    }
+
+    this.registerUniformComplex = function (name, initVal) {
+        var uniformName = makeUniformName(name);
+        var locRe = gl.getUniformLocation(program, uniformName + '.Re');
+        var locIm = gl.getUniformLocation(program, uniformName + '.Im');
+        var value = new Geometry.Complex(initVal);
+        if (locRe) {
+            Object.defineProperty(this, name, {
+                get: function () {
+                    if (value.Im == 0.0)
+                        return value.re;
+                    else
+                        return value;
+                },
+                set: function (newRe, newIm) {
+                    value = new Geometry.Complex(newRe, newIm);
+                    gl.uniform1f(locRe, value.re);
+                    gl.uniform1f(locIm, value.im);
+                    return value;
+                }
+            });
+        } else {
+            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+        }
+    }
+
+    this.registerUniformFloat3 = function (name) {
+        var loc = gl.getUniformLocation(program, makeUniformName(name));
+        var value;
+        if (loc) {
+            Object.defineProperty(this, name, {
+                get: function () {
+                    return value;
+                },
+                set: function () {
+                    if (typeof arguments[1] == 'undefined')
+                        value = [arguments[0][0], arguments[0][1], arguments[0][2]];
+                    else
+                        value = [arguments[0], arguments[1], arguments[2]];
+                    gl.uniform3f(loc, value[0], value[1], value[2]);
+                    return value;
+                }
+            });
+        } else {
+            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+        }
+    }
+
+    this.registerUniformFloat3Array = function (name) {
+        var loc = gl.getUniformLocation(program, makeUniformName(name));
+        var value;
+        if (loc) {
+            Object.defineProperty(this, name, {
+                get: function () {
+                    return value;
+                },
+                set: function (newValue) {
+                    value = newValue;
+                    if (value.length == 0)
+                        return value;
+                    if (typeof value[0][0] != 'undefined') {
+                        var array = new Float32Array(3*value.length);
+                        var j = 0;
+                        for (var i = 0; i < value.length; ++ i) {
+                            array[j++] = value[i][0];
+                            array[j++] = value[i][1];
+                            array[j++] = value[i][2];
+                        }
+                        gl.uniform3fv(loc, array);
+                    } else {
+                        gl.uniform3fv(loc, value);
+                    }
                     return value;
                 }
             });
