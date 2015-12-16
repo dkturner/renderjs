@@ -3,6 +3,8 @@ precision highp float;
 attribute vec3 aVertexPosition;
 attribute vec3 aVertexNormal;
 attribute vec2 aTextureCoord;
+attribute vec3 aUVector;
+attribute vec3 aVVector;
 
 uniform mat4 uModelMatrix;
 uniform mat4 uCameraMatrix;
@@ -16,6 +18,8 @@ varying highp vec4 vPosition;
 varying highp vec3 vModelSpacePosition;
 varying highp vec3 vCamSpacePosition;
 varying highp vec3 vNormal;
+varying highp vec3 vUVector;
+varying highp vec3 vVVector;
 
 void main(void) {
     vec4 modelSpace = uModelMatrix * vec4(aVertexPosition, 1.0);
@@ -26,13 +30,17 @@ void main(void) {
     vCamSpacePosition = cameraSpace.xyz / cameraSpace.w;
     vModelSpacePosition = modelSpace.xyz / modelSpace.w;
     // Actually the calculation below is not correct, see the discussion at
-    // http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/
-    // Also, irritatingly, WebGL doesn't support the inverse() function.  And calculating
-    // the inverse in Javascript for each mesh is likely to be slow.  So I'm sticking with
-    // this until I can implement an inverse function in GLSL.  Hopefully the GPU compiler
-    // will be good enough to optimize this out of the vertex pipeline.
-    vec4 normal4 = uModelMatrix * vec4(aVertexNormal, 0.0);
-    vNormal = normal4.xyz;
+    //   http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/
+    // Also, irritatingly, WebGL (read GL ES) doesn't support the inverse() function.  And calculating
+    // the inverse in Javascript for each mesh at every frame is likely to be slow.  So I'm sticking with
+    // this until I can implement an inverse function in GLSL.  Hopefully the GPU compiler will be good
+    // enough to optimize this out of the vertex pipeline.
+    vec4 normal = uModelMatrix * vec4(aVertexNormal, 0.0);
+    vNormal = normal.xyz;
+    vec4 uVec = uModelMatrix * vec4(aUVector, 0.0);
+    vUVector = uVec.xyz;
+    vec4 vVec = uModelMatrix * vec4(aVVector, 0.0);
+    vVVector = vVec.xyz;
     if (uWireframe) {
         // calculate the near and far planes in camera space
         vec4 f_ = vec4(0,0,1,-1) * uViewportMatrix;

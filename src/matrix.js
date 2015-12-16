@@ -410,6 +410,8 @@ var MatrixStack = (function () {
                 s1 = +data[(src+36)>>2]*+data[(src+ 8)>>2] - +data[(src+ 4)>>2]*+data[(src+40)>>2];
                 s2 = +data[(src+ 4)>>2]*+data[(src+24)>>2] - +data[(src+20)>>2]*+data[(src+ 8)>>2];
                 det = s0*+data[(src+ 0)>>2] + s1*+data[(src+16)>>2] + s2*+data[(src+32)>>2];
+                if (-2.38e-7 <= det && det <= 2.38e-7)
+                    return 0;
                 invdet = +1 / det;
                 // 3x3 col 1
                 data[(dst+ 0)>>2] = fround(s0 * invdet);
@@ -432,7 +434,7 @@ var MatrixStack = (function () {
                 data[(dst+28)>>2] = fround(0.0);
                 data[(dst+44)>>2] = fround(0.0);
                 data[(dst+60)>>2] = fround(1.0);
-                return;
+                return 1;
             }
             s0 = +data[(src+ 0)>>2]*+data[(src+20)>>2] - +data[(src+ 4)>>2]*+data[(src+16)>>2];
             s1 = +data[(src+ 0)>>2]*+data[(src+36)>>2] - +data[(src+ 4)>>2]*+data[(src+32)>>2];
@@ -447,6 +449,8 @@ var MatrixStack = (function () {
             c1 = +data[(src+ 8)>>2]*+data[(src+44)>>2] - +data[(src+12)>>2]*+data[(src+40)>>2];
             c0 = +data[(src+ 8)>>2]*+data[(src+28)>>2] - +data[(src+12)>>2]*+data[(src+24)>>2];
             det = s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0;
+            if (-2.38e-7 <= det && det <= 2.38e-7)
+                return 0;
             invdet = +1/det;
             data[(dst+ 0)>>2] = ( +data[(src+20)>>2]*c5 - +data[(src+36)>>2]*c4 + +data[(src+52)>>2]*c3) * invdet;
             data[(dst+16)>>2] = (-+data[(src+16)>>2]*c5 + +data[(src+32)>>2]*c4 - +data[(src+48)>>2]*c3) * invdet;
@@ -464,22 +468,37 @@ var MatrixStack = (function () {
             data[(dst+28)>>2] = ( +data[(src+ 0)>>2]*c3 - +data[(src+16)>>2]*c1 + +data[(src+32)>>2]*c0) * invdet;
             data[(dst+44)>>2] = (-+data[(src+12)>>2]*s3 + +data[(src+28)>>2]*s1 - +data[(src+44)>>2]*s0) * invdet;
             data[(dst+60)>>2] = ( +data[(src+ 8)>>2]*s3 - +data[(src+24)>>2]*s1 + +data[(src+40)>>2]*s0) * invdet;
+            return 1;
         }
 
-        function transform(index, x, y, z) {
+        function transpose(dst) {
+            dst = dst|0;
+            var temp = fround(0.0);
+            dst = dst<<6;
+            temp = fround(data[(dst+ 4)>>2]); data[(dst+ 4)>>2] = fround(data[(dst+16)>>2]); data[(dst+16)>>2] = fround(temp);
+            temp = fround(data[(dst+ 8)>>2]); data[(dst+ 8)>>2] = fround(data[(dst+32)>>2]); data[(dst+32)>>2] = fround(temp);
+            temp = fround(data[(dst+12)>>2]); data[(dst+12)>>2] = fround(data[(dst+48)>>2]); data[(dst+48)>>2] = fround(temp);
+            temp = fround(data[(dst+24)>>2]); data[(dst+24)>>2] = fround(data[(dst+36)>>2]); data[(dst+36)>>2] = fround(temp);
+            temp = fround(data[(dst+28)>>2]); data[(dst+28)>>2] = fround(data[(dst+52)>>2]); data[(dst+52)>>2] = fround(temp);
+            temp = fround(data[(dst+44)>>2]); data[(dst+44)>>2] = fround(data[(dst+56)>>2]); data[(dst+56)>>2] = fround(temp);
+        }
+
+        function transform(index, x, y, z, w) {
             index = index|0;
             x = +x;
             y = +y;
             z = +z;
+            w = +w;
             var x_=0.0, y_=0.0, z_=0.0, u_=0.0;
             index = index<<6;
-            x_ = x*+data[(index+ 0)>>2] + y*+data[(index+16)>>2] + z*+data[(index+32)>>2] + +data[(index+48)>>2];
-            y_ = x*+data[(index+ 4)>>2] + y*+data[(index+20)>>2] + z*+data[(index+36)>>2] + +data[(index+52)>>2];
-            z_ = x*+data[(index+ 8)>>2] + y*+data[(index+24)>>2] + z*+data[(index+40)>>2] + +data[(index+56)>>2];
-            u_ = x*+data[(index+12)>>2] + y*+data[(index+28)>>2] + z*+data[(index+44)>>2] + +data[(index+60)>>2];
-            data[( 0)>>2] = fround(x_ / u_);
-            data[( 4)>>2] = fround(y_ / u_);
-            data[( 8)>>2] = fround(z_ / u_);
+            x_ = x*+data[(index+ 0)>>2] + y*+data[(index+16)>>2] + z*+data[(index+32)>>2] + w*+data[(index+48)>>2];
+            y_ = x*+data[(index+ 4)>>2] + y*+data[(index+20)>>2] + z*+data[(index+36)>>2] + w*+data[(index+52)>>2];
+            z_ = x*+data[(index+ 8)>>2] + y*+data[(index+24)>>2] + z*+data[(index+40)>>2] + w*+data[(index+56)>>2];
+            u_ = x*+data[(index+12)>>2] + y*+data[(index+28)>>2] + z*+data[(index+44)>>2] + w*+data[(index+60)>>2];
+            data[( 0)>>2] = fround(x_);
+            data[( 4)>>2] = fround(y_);
+            data[( 8)>>2] = fround(z_);
+            data[(12)>>2] = fround(u_);
         }
 
         return {
@@ -494,6 +513,7 @@ var MatrixStack = (function () {
             rmul: rmul,
             copy: copy,
             invert: invert,
+            transpose: transpose,
             transform: transform
         }
     }
@@ -533,10 +553,23 @@ var MatrixStack = (function () {
                 throw {error:'nothing to pop'};
             count--;
         }
+        this.swap = function () {
+            if (count < 2)
+                throw {error:'nothing to swap'};
+            asm.copy(0, count);
+            asm.copy(count, count - 1);
+            asm.copy(count - 1, 0);
+        }
         this.mul = function () {
             if (count < 2)
                 throw {error:'too few matrices on stack to multiply'};
             asm.rmul(count - 1, count);
+            count--;
+        }
+        this.lmul = function () {
+            if (count < 2)
+                throw {error:'too few matrices on stack to multiply'};
+            asm.lmul(count - 1, count);
             count--;
         }
         this.det = function () {
@@ -546,21 +579,145 @@ var MatrixStack = (function () {
             var det3 = data[i+ 1]*data[i+ 6] - data[i+ 5]*data[i+ 2];
             return det1*data[i+0] - det2*data[i+4] + det3*data[i+8];
         }
-        this.transform = function (x, y, z) {
-            if (y == undefined && z == undefined)
-                asm.transform(count, x[0], x[1], x[2]);
-            else
-                asm.transform(count, x, y, z);
+        this.transform = function (x, y, z, w) {
+            if (y == undefined && z == undefined && w == undefined) {
+                var w = 1;
+                if (x.length == 4)
+                    w = x[3];
+                asm.transform(count, x[0], x[1], x[2], w);
+                if (x.length == 4)
+                    return [data[0], data[1], data[2], data[3]];
+                return [data[0]/data[3], data[1]/data[3], data[2]/data[3]];
+            } else {
+                if (w != undefined) {
+                    asm.transform(count, x, y, z, w);
+                    return [data[0], data[1], data[2], data[3]];
+                } else {
+                    asm.transform(count, x, y, z, 1);
+                    return [data[0]/data[3], data[1]/data[3], data[2]/data[3]];
+                }
+            }
             return [data[0], data[1], data[2]];
         }
         this.invert = function () {
-            asm.invert(0, count);
+            if (!asm.invert(0, count))
+                return false; // matrix is singular; nothing changed on stack
             asm.copy(count, 0);
+            return true;
         }
-        this.loadRowMajor = function (m) {
+        this.transpose = function () {
+            asm.transpose(count);
+        }
+        this.qrDecompose = function () {
+            // unrolled Householder method
+            this.push();
+            var i = count<<4;
+            asm.identity(count - 1);
+            // stack is: I,  A
+
+            var ax = data[i+4*0+0], ay = data[i+4*0+1], az = data[i+4*0+2], aw = data[i+4*0+3];
+            var len = Math.sqrt(ax*ax + ay*ay + az*az + aw*aw);
+            if (len > 0) {
+                var u = [ax, ay, az, aw];
+                if (ax >= 0)
+                    u[0] += len;
+                else
+                    u[0] -= len;
+                u[1] /= u[0];
+                u[2] /= u[0];
+                u[3] /= u[0];
+                u[0] = 1;
+                var beta = 2 / (1+u[1]*u[1]+u[2]*u[2]+u[3]*u[3]);
+                this.loadRowMajor([
+                    [ 1 - beta*u[0]*u[0],  -beta*u[0]*u[1]  ,  -beta*u[0]*u[2]  ,  -beta*u[0]*u[3]   ],
+                    [  -beta*u[1]*u[0]  , 1 - beta*u[1]*u[1],  -beta*u[1]*u[2]  ,  -beta*u[1]*u[3]   ],
+                    [  -beta*u[2]*u[0]  ,  -beta*u[2]*u[1]  , 1 - beta*u[2]*u[2],  -beta*u[2]*u[3]   ],
+                    [  -beta*u[3]*u[0]  ,  -beta*u[3]*u[1]  ,  -beta*u[3]*u[2]  , 1 - beta*u[3]*u[3] ],
+                ], count);
+                asm.lmul(count, 0);
+                asm.rmul(count - 1, 0);
+            }
+            var ax = 0, ay = data[i+4*1+1], az = data[i+4*1+2], aw = data[i+4*1+3];
+            var len = Math.sqrt(ay*ay + az*az + aw*aw);
+            if (len > 0) {
+                var u = [0, ay, az, aw];
+                if (ay >= 0)
+                    u[1] += len;
+                else
+                    u[1] -= len;
+                u[2] /= u[1];
+                u[3] /= u[1];
+                u[1] = 1;
+                var beta = 2 / (0+1+u[2]*u[2]+u[3]*u[3]);
+                this.loadRowMajor([
+                    [  1  ,         0         ,         0         ,         0          ],
+                    [  0  , 1 - beta*u[1]*u[1],  -beta*u[1]*u[2]  ,  -beta*u[1]*u[3]   ],
+                    [  0  ,  -beta*u[2]*u[1]  , 1 - beta*u[2]*u[2],  -beta*u[2]*u[3]   ],
+                    [  0  ,  -beta*u[3]*u[1]  ,  -beta*u[3]*u[2]  , 1 - beta*u[3]*u[3] ],
+                ], count);
+                asm.lmul(count, 0);
+                asm.rmul(count - 1, 0);
+            }
+            var ax = 0, ay = 0, az = data[i+4*2+2], aw = data[i+4*2+3];
+            var len = Math.sqrt(az*az + aw*aw);
+            if (len > 0) {
+                var u = [0, 0, az, aw];
+                if (az >= 0)
+                    u[2] += len;
+                else
+                    u[2] -= len;
+                u[3] /= u[2];
+                u[2] = 1;
+                var beta = 2 / (0+0+1+u[3]*u[3]);
+                this.loadRowMajor([
+                    [  1  ,  0  ,         0         ,         0          ],
+                    [  0  ,  1  ,         0         ,         0          ],
+                    [  0  ,  0  , 1 - beta*u[2]*u[2],  -beta*u[2]*u[3]   ],
+                    [  0  ,  0  ,  -beta*u[3]*u[2]  , 1 - beta*u[3]*u[3] ],
+                ], count);
+                asm.lmul(count, 0);
+                asm.rmul(count - 1, 0);
+            }
+            this.loadRowMajor([
+                [  1  ,  0  ,  0  ,  0  ],
+                [  0  ,  1  ,  0  ,  0  ],
+                [  0  ,  0  ,  1  ,  0  ],
+                [  0  ,  0  ,  0  , -1  ],
+            ], count);
+            asm.lmul(count, 0);
+            asm.rmul(count - 1, 0);
+            // Now the stack is: H1.H2.H3,  H3.H2.H1.A  ===  Q,  R
+        }
+        this.getBasisAndNullSpace = function () {
+            this.push();
+            this.transpose();
+            this.qrDecompose(); // pushes Q and R onto the stack, and the columns of Q have the null-space
+            this.pop();
+            var orthVecs = this.getColMajor(); // orthogonal basis for M
+            this.pop();
+            // We pick out the null space by checking ||Mx||^2.  But we could also
+            // check the main diagonal of R for zeros - the corresponding column in the
+            // Q matrix is a basis of the null space.
+            var basisVectors = [];
+            var nullVectors = [];
+            for (var j = 0; j < orthVecs.length; ++ j) {
+                var x = orthVecs[j];
+                var y = this.transform(x[0], x[1], x[2], x[3]);
+                var s = y[0]*y[0] + y[1]*y[1] + y[2]*y[2] + y[3]*y[3];
+                if (s < 2.38e-7)
+                    nullVectors.push(x);
+                else
+                    basisVectors.push(x);
+            }
+            return {
+                basis: basisVectors,
+                nulls: nullVectors
+            };
+        }
+        this.loadRowMajor = function (m, stackIndex) {
             // Note that we load in ROW-MAJOR format, which is the more intuitive format for matrices described
             // in code or textual data.
-            var i = count << 4;
+            var i = (count - (stackIndex|0)) << 4;
             if (m instanceof MatrixStack)
                 m = m.getRowMajor();
             if (typeof m[0] == 'undefined')
@@ -577,8 +734,8 @@ var MatrixStack = (function () {
                 data[i+ 3] = m[12];   data[i+ 7] = m[13];   data[i+11] = m[14];   data[i+15] = m[15];
             }
         }
-        this.load = this.loadColMajor = function (m) {
-            var i = count << 4;
+        this.load = this.loadColMajor = function (m, stackIndex) {
+            var i = (count - (stackIndex|0)) << 4;
             if (m instanceof MatrixStack)
                 m = m.getData();
             if (typeof m[0] == 'undefined')
@@ -595,16 +752,26 @@ var MatrixStack = (function () {
                 data[i+ 3] = m[ 3];   data[i+ 7] = m[ 7];   data[i+11] = m[11];   data[i+15] = m[15];
             }
         }
-        this.getData = function() {
-            return new Float32Array(heap, count<<6, 64>>2);
+        this.getData = function(stackIndex) {
+            stackIndex = stackIndex | 0;
+            return new Float32Array(heap, (count-stackIndex)<<6, 64>>2);
         }
-        this.getRowMajor = function () {
-            var i = count << 4;
+        this.getRowMajor = function (stackIndex) {
+            var i = (count - (stackIndex|0)) << 4;
             return [
                 [ data[i+ 0], data[i+ 4], data[i+ 8], data[i+12] ],
                 [ data[i+ 1], data[i+ 5], data[i+ 9], data[i+13] ],
                 [ data[i+ 2], data[i+ 6], data[i+10], data[i+14] ],
                 [ data[i+ 3], data[i+ 7], data[i+11], data[i+15] ]
+            ];
+        }
+        this.getColMajor = function (stackIndex) {
+            var i = (count - (stackIndex|0)) << 4;
+            return [
+                [ data[i+ 0], data[i+ 1], data[i+ 2], data[i+ 3] ],
+                [ data[i+ 4], data[i+ 5], data[i+ 6], data[i+ 7] ],
+                [ data[i+ 8], data[i+ 9], data[i+10], data[i+11] ],
+                [ data[i+12], data[i+13], data[i+14], data[i+15] ]
             ];
         }
         Object.defineProperty(this, 'length', {
@@ -614,11 +781,26 @@ var MatrixStack = (function () {
         });
     }
 
+    function toFixed2(x) {
+        var f = x.toFixed(2);
+        if (x > 0)
+            return ' ' + f;
+        return f;
+    }
+
+    function debugDumpMatrix(m, index) {
+        console.log(Array.from(m.getData(index)).map(toFixed2).join(', '));
+    }
+
+    MatrixStack.debugDumpMatrix = debugDumpMatrix;
+
     // IE shim, it doesn't appear to support asmjs anyway...
     if (typeof window != 'undefined' && typeof window.Math.fround == 'undefined')
         window.Math.fround = function (x) { return x; };
     if (typeof window != 'undefined' && typeof window.Math.imul == 'undefined')
         window.Math.imul = function (x, y) { return x * y; };
+
+        
 
     return MatrixStack;
 })();

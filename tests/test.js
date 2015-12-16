@@ -29,7 +29,8 @@ var Test = (function () {
             var tokens = new RegExp(
                 '(\\.?)([$a-zA-Z_][$a-zA-Z_0-9]*)|' +
                 '(-?[0-9]+(?:\\.[0-9]*)?)|' +
-                '((?:"[^"]*(?:""[^"]+)*")|(?:\'[^\']*(?:\'\'[^\']+)*\'))', 'g');
+                '((?:"[^"]*(?:""[^"]+)*")|(?:\'[^\']*(?:\'\'[^\']+)*\'))|' +
+                '(//.*$)', 'gm');
             source = source.replace(tokens, function (token) {
                 var className;
                 if (arguments[2]) {
@@ -45,11 +46,18 @@ var Test = (function () {
                     className = 'num';
                 else if (arguments[4])
                     className = 'str';
+                else if (arguments[5])
+                    className = 'com';
                 return '<span class="js-' + className + '">' + token + '</span>';
             });
             return $('<pre class="javascript">' + source + '</pre>');
         },
         showSource: function () {
+            var container = $('#source');
+            if (container.length > 0) {
+                container.remove();
+                return;
+            }
             var source = Test.createSourceElement();
             var container = $('<div id="source"><h3>Source code</h3><button class="close">Close</button><div class="container"></div></div>');
             container.find('.container').append(source);

@@ -8,11 +8,12 @@
     <div id="ui-overlay">
         <div class="control-bar">
             <div id="fps"></div>
-            <input id="tilt" type="range" min="-90" max="90" value="0">
-            <input id="spin" type="range" min="-180" max="180" value="0">
+            <a href="http://dkturner.github.io/renderjs/">renderjs</a>
+            <button onclick="Test.showSource()">Show source</button>
+            <div class="input"><input id="tilt" type="range" min="-90" max="90" value="0"><label>Tilt</label></div>
+            <div class="input"><input id="spin" type="range" min="-180" max="180" value="0"><label>Spin</label></div>
             <label><input id="animate" type="checkbox" checked> Animate</label>
             <label><input id="grid" type="checkbox"> Grid</label>
-            <button onclick="Test.showSource()">Show source</button>
         </div>
         <table>
             <tr>

@@ -124,7 +124,7 @@ function Parser() {
             tree.subtree = optimize(tree.subtree);
             if (tree.subtree.op == 'const')
                 return {op: 'const', value: -tree.subtree.value};
-        } else if (tree.args) {
+        } else if (tree.args instanceof Array) {
             if (tree.name == 'pi')
                 return {op: 'const', value: Math.PI};
             if (tree.name == 'e')

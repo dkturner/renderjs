@@ -80,6 +80,12 @@ function Shader(gl, vertexProgram, fragmentProgram) {
         }
     }
 
+    this.setSampler = function (name, textureUnit) {
+        var loc = gl.getUniformLocation(program, name);
+        gl.useProgram(this.glProgram);
+        gl.uniform1i(loc, textureUnit);
+    }
+
     this.registerUniformMatrix = function (name) {
         var loc = gl.getUniformLocation(program, makeUniformName(name));
         var value;

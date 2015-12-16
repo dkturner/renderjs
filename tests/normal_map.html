@@ -1,0 +1,105 @@
+<html>
+<head>
+    <title>Normal Mapping</title>
+    <link rel="stylesheet" href="tests.css"></style>
+</head>
+<body>
+    <canvas></canvas>
+    <div id="ui-overlay">
+        <div class="control-bar">
+            <div id="fps"></div>
+            <a href="http://dkturner.github.io/renderjs/">renderjs</a>
+            <button onclick="Test.showSource()">Show source</button>
+            <label><input id="animating" type="checkbox" checked> Animate</label>
+            <div class="input"><input id="tilt" type="range" min="-90" max="90" value="0"><label>Camera Angle</label></div>
+            <div class="input"><input id="spin" type="range" min="-180" max="180" value="0"><label>Object Rotation</label></div>
+            <div class="input"><input id="refractive" type="range" min="1" max="5" value="2.5" step="0.1"><label>Refractive Index</label></div>
+            <div class="input"><input id="gloss" type="range" min="0" max="0.97" value="0.8" step="0.01"><label>Gloss</label></div>
+        </div>
+    </div>
+    <script type="text/javascript" src="../lib/jquery-2.1.4.min.js"></script>
+    <script type="text/javascript" src="../dist/renderjs-0.1.js"></script>
+    <script type="text/javascript" src="test.js"></script>
+    <script type="text/javascript">
+var scene = {
+    // Note that lights can be specified at any level,
+    // and they share the transforms applied to that level.
+    // This light will move when the scene is tilted.
+    // Positions and colours can of course be expressions
+    // rather than constants.
+    lights: [{
+        type: 'point',
+        position: [0,500,1000],
+        color: [1, 1, 1]
+    },{
+        type: 'point',
+        position: [0,-500,-1000],
+        color: [0.5, 0.5, 0.5]
+    }],
+    // "material" is a convenience node which is
+    // equivalent to saying:
+    //   shader: { parameters: { ... } }
+    // Shader parameters are inherited by child
+    // nodes, in this case the sphere and the cube.
+    material: {
+        refractiveIndex: '$refractive',
+        gloss: '$gloss',
+    },
+    transform: [
+        ['rotate', '$tilt', 1, 0, 0],
+    ],
+    children: [
+        renderjs.Primitives.cube({}, {
+            transform: [
+                ['translate', -2, 0, 0],
+                ['scale', 2, 2, 2],
+                ['rotate', 'if($animating,$time*30)+$spin', 0, 1, 0],
+            ],
+            mesh: {
+                texture: 'cubetexture.png',
+                normalMap: 'cubetexture_nm.png'
+            }
+        }),
+        renderjs.Primitives.sphere({
+            targetTriangles: 900,
+            projection: 'polar'
+        }, {
+            transform: [
+                ['translate', 2, 0, 0],
+                ['scale', 1.5, 1.5, 1.5],
+                ['rotate', 'if($animating,$time*30)+$spin', 0, 1, 0],
+            ],
+            mesh: {
+                texture: 'earth_polar.jpg',
+                normalMap: 'earth_polar_nm.jpg'
+            }
+        }),
+    ]
+};
+var canvas = $('canvas')[0];
+canvas.width = $('body').width();
+canvas.height = $('body').height();
+renderjs.createRenderer(canvas).then(function (renderer) {
+    function updateParameters() {
+        var wasAnimating = renderer.parameters.$animating;
+        renderer.parameters.$animating = $('#animating').prop('checked');
+        renderer.parameters.$spin = +$('#spin').val();
+        renderer.parameters.$tilt = +$('#tilt').val();
+        renderer.parameters.$refractive = +$('#refractive').val();
+        renderer.parameters.$gloss = +$('#gloss').val();
+        if (!wasAnimating && renderer.parameters.$animating) {
+            renderer.time = 0;
+            renderer.start();
+        }
+        if (wasAnimating && !renderer.parameters.$animating)
+            renderer.stop();
+        if (!renderer.parameters.$animating)
+            renderer.renderAt(0);
+    }
+    renderer.addNode(scene);
+    renderer.resources.onresourcesloaded = updateParameters;
+    $('input').on('input change', updateParameters);
+});
+    </script>
+</body>
+</html>
