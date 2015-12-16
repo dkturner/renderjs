@@ -1,27 +1,27 @@
 #extension GL_EXT_frag_depth : enable
 precision highp float;
 
-uniform sampler2D uSampler0;
+uniform sampler2D uWireframe;
 uniform vec2 uViewportSize;
 uniform mat4 uPerspective;
 
 varying vec2 vTextureCoord;
 
 void main(void) {
-    vec4 pix = texture2D(uSampler0, vTextureCoord);
+    vec4 pix = texture2D(uWireframe, vTextureCoord);
     if (pix.a == 0.0) {
         discard;
     } else {
         vec2 onePixel = vec2(1.0, 1.0) / uViewportSize;
         vec4 edge = (8.*pix -
-            texture2D(uSampler0, vTextureCoord + vec2(-onePixel.x, -onePixel.y)) -
-            texture2D(uSampler0, vTextureCoord + vec2(-onePixel.x, 0)) -
-            texture2D(uSampler0, vTextureCoord + vec2(-onePixel.x, onePixel.y)) -
-            texture2D(uSampler0, vTextureCoord + vec2(0, -onePixel.y)) -
-            texture2D(uSampler0, vTextureCoord + vec2(0, onePixel.y)) -
-            texture2D(uSampler0, vTextureCoord + vec2(onePixel.x, -onePixel.y)) -
-            texture2D(uSampler0, vTextureCoord + vec2(onePixel.x, 0)) -
-            texture2D(uSampler0, vTextureCoord + vec2(onePixel.x, onePixel.y)))/8. ;
+            texture2D(uWireframe, vTextureCoord + vec2(-onePixel.x, -onePixel.y)) -
+            texture2D(uWireframe, vTextureCoord + vec2(-onePixel.x, 0)) -
+            texture2D(uWireframe, vTextureCoord + vec2(-onePixel.x, onePixel.y)) -
+            texture2D(uWireframe, vTextureCoord + vec2(0, -onePixel.y)) -
+            texture2D(uWireframe, vTextureCoord + vec2(0, onePixel.y)) -
+            texture2D(uWireframe, vTextureCoord + vec2(onePixel.x, -onePixel.y)) -
+            texture2D(uWireframe, vTextureCoord + vec2(onePixel.x, 0)) -
+            texture2D(uWireframe, vTextureCoord + vec2(onePixel.x, onePixel.y)))/8. ;
         float edginess = edge.r*edge.r + edge.g*edge.g + edge.b*edge.b;
         if (edginess > 0.01) {
             gl_FragColor = vec4(1,1,1,1);

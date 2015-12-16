@@ -84,7 +84,7 @@ function LexicalScope() {
 
 function minify(source, output, options) {
     var defaultOptions = {
-        renameVariables: false,
+        renameVariables: true,
         lexicalScope: new LexicalScope(),
     };
     if (output && !output.call && options == undefined) {
@@ -180,9 +180,11 @@ function minify(source, output, options) {
                 if (s.type == 'VariableDeclaration') {
                     for (var j = 0; j < s.declarations.length; ++ j)
                         anonymize(s.declarations[j].id.name);
-                } else if (s.type == 'FunctionExpression') {
+                } else if (s.type == 'FunctionExpression' || s.type == 'FunctionDeclaration') {
                     if (s.id)
                         anonymize(s.id.name);
+                    for (var j = 0; j < s.params.length; ++ j)
+                        anonymize(s.params[j].name);
                 } else if (s.type == 'ForStatement' || s.type == 'ForInStatement') { // gotcha
                     var decl = s.init || s.left;
                     if (decl && decl.type == 'VariableDeclaration') {
@@ -402,6 +404,9 @@ function minify(source, output, options) {
                 this.visit(node.argument);
             }
             output(';');
+        }
+        this.ContinueStatement = function (node) {
+            output('continue;');
         }
         this.NewExpression = function (node) {
             output('new ');
@@ -702,7 +707,7 @@ if (typeof window == 'undefined') {
         var options = {
             stripModules: true,
             moduleName: name,
-            renameVariables: false
+            renameVariables: true
         };
         if (options.stripModules)
             options.lexicalScope = new builder.LexicalScope();

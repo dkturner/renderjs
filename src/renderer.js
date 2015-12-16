@@ -56,8 +56,7 @@ function Renderer(gl, width, height, resources) {
         function addLights(data) {
             if (data.transform && (data.lights || data.childrenWithLights)) {
                 lightsMatrix.push();
-                for (var i = 0; i < data.transform.length; ++ i)
-                    data.transform[i](lightsMatrix);
+                data.transform(lightsMatrix);
             }
             if (data.lights) {
                 for (var i = 0; i < data.lights.length; ++ i) {
@@ -102,6 +101,8 @@ function Renderer(gl, width, height, resources) {
                     return param(renderer.time);
                 if (typeof param == 'number')
                     return param;
+                if (typeof param == 'boolean')
+                    return param ? 1.0 : 0.0;
                 return 0.0;
             }
         }, parserBuiltins)
@@ -187,8 +188,19 @@ function Renderer(gl, width, height, resources) {
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
         }
+        if (mesh.normalMap) {
+            program.normalMapping = true;
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, mesh.normalMap);
+            program.uVector = mesh.tangentSpace.u;
+            program.vVector = mesh.tangentSpace.v;
+        }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.faceBuffer);
         gl.drawElements(gl.TRIANGLES, mesh.faceCount, gl.UNSIGNED_SHORT, 0);
+        if (program.normalMapping) {
+            program.uVector = null;
+            program.vVector = null; // turn these off
+        }
     }
 
     function getRenderData(node) {
@@ -204,17 +216,37 @@ function Renderer(gl, width, height, resources) {
             result.mesh.vertexBuffer = unpackBuffer(node.mesh.vertices, 3);
             if (node.mesh.texture) {
                 result.mesh.texture = loadingTexture;
-                resources.texture(node.mesh.texture).then (function (texture) {
+                resources.texture(node.mesh.texture).then(function (texture) {
                     result.mesh.texture = texture;
                     repaintRequired();
                 });
             }
             var normals = node.mesh.normals;
             if (!normals)
-                normals = computeNormals(node.mesh);
+                normals = Geometry.computeNormals(node.mesh);
             result.mesh.normalBuffer = unpackBuffer(normals, 3);
-            if (node.mesh.texCoords)
+            if (node.mesh.texCoords) {
                 result.mesh.texCoords = unpackBuffer(node.mesh.texCoords, 2);
+                if (node.mesh.normalMap) {
+                    result.mesh.normalMap = null;
+                    resources.texture(node.mesh.normalMap).then(function (texture) {
+                        result.mesh.normalMap = texture;
+                        repaintRequired();
+                    });
+                    if (!node.mesh.tangentSpace) {
+                        var t = Geometry.computeTangentSpace(node.mesh, normals, true);
+                        result.mesh.tangentSpace = {
+                            u: unpackBuffer(t, 3, gl.FLOAT, gl.ARRAY_BUFFER, 1, 0, 0),
+                            v: unpackBuffer(t, 3, gl.FLOAT, gl.ARRAY_BUFFER, 1, 0, 1),
+                        };
+                    } else {
+                        result.mesh.tangentSpace = {
+                            u: unpackBuffer(node.mesh.tangentSpace.u, 3),
+                            v: unpackBuffer(node.mesh.tangentSpace.v, 3),
+                        };
+                    }
+                }
+            }
             if (node.mesh.mode == 'strip') {
                 throw {error: 'mesh mode not supported', reason: node.mesh.mode};
             } else if (node.mesh.faces) {
@@ -412,71 +444,33 @@ function Renderer(gl, width, height, resources) {
         }
     }
 
-    function unpackBuffer(buffer, size, type, target) {
+    function unpackBuffer(buffer, size, type, target, stride, offset, interior) {
         type = type || gl.FLOAT;
         target = target || gl.ARRAY_BUFFER;
+        stride = stride || 1;
+        offset = offset|0;
         var array;
+        var numElements = (buffer.length - offset)/stride | 0;
         if (type == gl.FLOAT)
-            array = new Float32Array(buffer.length * size);
+            array = new Float32Array(numElements * size);
         else if (type == gl.UNSIGNED_SHORT)
-            array = new Uint16Array(buffer.length * size);
+            array = new Uint16Array(numElements * size);
         else
             throw {error:'unknown buffer type', reason:type};
         var k = 0;
-        for (var i = 0; i < buffer.length; ++ i)
-            for (var j = 0; j < size; ++ j)
-                array[k++] = buffer[i][j];
+        if (typeof interior == 'undefined') {
+            for (var i = offset; i < buffer.length; i += stride)
+                for (var j = 0; j < size; ++ j)
+                    array[k++] = buffer[i][j];
+        } else {
+            for (var i = offset; i < buffer.length; i += stride)
+                for (var j = 0; j < size; ++ j)
+                    array[k++] = buffer[i][interior][j];
+        }
         var glBuf = gl.createBuffer();
         gl.bindBuffer(target, glBuf);
         gl.bufferData(target, array, gl.STATIC_DRAW);
         return glBuf;
-    }
-
-    function averageNormals(normals) {
-        // we can assume all the normals are unit length, so arithmetic averaging followed by normalization works
-        var x = 0;
-        var y = 0;
-        var z = 0;
-        for (var i = 0; i < normals.length; ++ i) {
-            x = x + normals[i][0];
-            y = y + normals[i][1];
-            z = z + normals[i][2];
-        }
-        var len = Math.sqrt(x*x+y*y+z*z);
-        if (len == 0) // oops, the result is degenerate, e.g. if two opposite-facing faces use the same vertex
-            return [0,0,1];
-        return [x/len, y/len, z/len];
-    }
-
-    function computeNormals(mesh) {
-        var n = [];
-        for (var i = 0; i < mesh.vertices.length; ++ i)
-            n.push([]);
-        for (var i = 0; i < mesh.faces.length; ++ i) {
-            var v1 = mesh.vertices[mesh.faces[i][0]];
-            var v2 = mesh.vertices[mesh.faces[i][1]];
-            var v3 = mesh.vertices[mesh.faces[i][2]];
-            // face normal is (v2 - v1) x (v3 - v2) (right-hand rule, anticlockwise points)
-            var a_x = v2[0] - v1[0], a_y = v2[1] - v1[1], a_z = v2[2] - v1[2];
-            var b_x = v3[0] - v2[0], b_y = v3[1] - v2[1], b_z = v3[2] - v2[2];
-            var n_x = a_y*b_z - a_z*b_y;
-            var n_y = a_z*b_x - a_x*b_z;
-            var n_z = a_x*b_y - a_y*b_x;
-            var len = Math.sqrt(n_x*n_x + n_y*n_y + n_z*n_z);
-            var normal = [n_x/len, n_y/len, n_z/len];
-            n[mesh.faces[i][0]].push(normal);
-            n[mesh.faces[i][1]].push(normal);
-            n[mesh.faces[i][2]].push(normal);
-        }
-        for (var i = 0; i < n.length; ++ i) {
-            if (n[i].length == 0) // unreferenced vertex, assign it a random normal (how about z^?)
-                n[i] = [0,0,1];
-            else if (n[i].length == 1)
-                n[i] = n[i][0];
-            else
-                n[i] = averageNormals(n[i]);
-        }
-        return n;
     }
 
     function createFramebuffer(floatTexture) {
@@ -675,9 +669,14 @@ function Renderer(gl, width, height, resources) {
         standardProgram = new Shader(gl, data['std-vertex.es2'], data['std-fragment.es2']);
         standardProgram.registerFlag('wireframe');
         standardProgram.registerFlag('renderEdges');
+        standardProgram.setSampler('uTexture', 0);
+        standardProgram.setSampler('uNormalMap', 1);
         standardProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 3);
         standardProgram.registerVertexAttrib('vertexNormal', gl.FLOAT, 3);
         standardProgram.registerVertexAttrib('textureCoord', gl.FLOAT, 2);
+        standardProgram.registerVertexAttrib('uVector', gl.FLOAT, 3);
+        standardProgram.registerVertexAttrib('vVector', gl.FLOAT, 3);
+        standardProgram.registerUniformInt('normalMapping');
         standardProgram.registerUniformMatrix('modelMatrix');
         standardProgram.registerUniformMatrix('cameraMatrix');
         standardProgram.registerUniformMatrix('viewportMatrix');
@@ -691,6 +690,7 @@ function Renderer(gl, width, height, resources) {
         wireframePostprocProgram = new Shader(gl, data['wfm-vertex.es2'], data['wfm-fragment.es2']);
         wireframePostprocProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 2);
         wireframePostprocProgram.registerVertexAttrib('textureCoord', gl.FLOAT, 2);
+        wireframePostprocProgram.setSampler('uWireframe', 0);
         wireframePostprocProgram.registerUniformMatrix('perspective');
         wireframePostprocProgram.setUniform2f('uViewportSize', width, height);
         wireframePostprocProgram.vertices = unpackBuffer([[-1,-1],[1,-1],[1,1],[1,1],[-1,1],[-1,-1]], 2);

@@ -1,13 +1,15 @@
 precision highp float;
 
-const int MAX_LIGHTS = 100;
+const int MAX_LIGHTS = 20;
 
 struct Complex {
     float Re;
     float Im;
 };
 
-uniform sampler2D uSampler0;
+uniform sampler2D uTexture;
+uniform highp sampler2D uNormalMap;
+uniform bool uNormalMapping;
 uniform bool uWireframe;
 uniform bool uRenderEdges;
 uniform mat4 uViewportMatrix;
@@ -26,6 +28,8 @@ varying highp vec4 vPosition;
 varying highp vec3 vModelSpacePosition;
 varying highp vec3 vCamSpacePosition;
 varying highp vec3 vNormal;
+varying highp vec3 vUVector;
+varying highp vec3 vVVector;
 
 float modifiedBessel_0(float x) {
     float ax = abs(x);
@@ -53,10 +57,17 @@ void main(void) {
         depthRep = log(depthRep * (exp(1.0) - 1.0) + 1.0);
         gl_FragColor = vec4(vColor.rgb, depthRep);
     } else {
-        vec4 textureColor = texture2D(uSampler0, vec2(vTextureCoord.s, vTextureCoord.t));
+        vec4 textureColor = texture2D(uTexture, vec2(vTextureCoord.s, vTextureCoord.t));
         vec4 fragColor;
         if (uNumberOfLights > 0) {
             vec3 normal = normalize(vNormal);
+            if (uNormalMapping) {
+                lowp vec4 displacement = texture2D(uNormalMap, vec2(vTextureCoord.s, vTextureCoord.t));
+                normal = normalize(
+                    2.0*(displacement.r - 0.5)*normalize(vUVector)
+                  + 2.0*(displacement.g - 0.5)*normalize(vVVector)
+                  + 2.0*(displacement.b - 0.5)*normal);
+            }
             vec3 totalLight = vec3(0, 0, 0);
             for (int i = 0; i < MAX_LIGHTS; ++i) {
                 if (i >= uNumberOfLights)
@@ -116,7 +127,7 @@ void main(void) {
                     (lightColor.r / 0.3 + lightColor.g / 0.59 + lightColor.b / 0.11) / 14.112;
                 float d = (1.0 - R) * energyIncoming;
                 float s = S * energyIncoming;
-                totalLight += d * textureColor.rgb + s * lightColor.rgb;
+                totalLight += d * textureColor.rgb * lightColor.rgb + s * lightColor.rgb;
             }
             fragColor = vec4(totalLight.rgb, 1);
         } else {

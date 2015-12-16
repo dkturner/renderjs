@@ -32,6 +32,22 @@ var dodecFaces = [
 ];
 var mappings = Geometry.Maps;
 
+function findOrAddVertex(mesh, v, n, t) {
+    for (var i = 0; i < mesh.vertices.length; ++ i) {
+        var v2 = mesh.vertices[i];
+        var n2 = mesh.normals[i];
+        var t2 = mesh.texCoords[i];
+        if (v[0] == v2[0] && v[1] == v2[1] && v[2] == v2[2]
+        && n[0] == n2[0] && n[1] == n2[1] && n[2] == n2[2]
+        && t[0] == t2[0] && t[1] == t2[1])
+            return i;
+    }
+    mesh.vertices.push(v);
+    mesh.normals.push(n);
+    mesh.texCoords.push(t);
+    return i;
+}
+
 var Primitives = {
     cube: function (options, properties) {
         var texCoords;
@@ -101,18 +117,11 @@ var Primitives = {
         }
         function subdivide(v1, v2, v3, d) {
             if (d >= s) {
-                var i = mesh.vertices.length;
-                mesh.vertices.push(v1);
-                mesh.vertices.push(v2);
-                mesh.vertices.push(v3);
-                mesh.faces.push([i, i+1, i+2]);
-                mesh.normals.push(v1);
-                mesh.normals.push(v2);
-                mesh.normals.push(v3);
                 var texCoords = options.projection.getTextureCoordinates(v1, v2, v3);
-                mesh.texCoords.push(texCoords[0]);
-                mesh.texCoords.push(texCoords[1]);
-                mesh.texCoords.push(texCoords[2]);
+                var i1 = findOrAddVertex(mesh, v1, v1, texCoords[0]);
+                var i2 = findOrAddVertex(mesh, v2, v2, texCoords[1]);
+                var i3 = findOrAddVertex(mesh, v3, v3, texCoords[2]);
+                mesh.faces.push([i1, i2, i3]);
             } else {
                 var v12 = mid(v1, v2);
                 var v23 = mid(v2, v3);
@@ -134,6 +143,36 @@ var Primitives = {
         }
         return augment({
             mesh: mesh
+        }, properties);
+    },
+    disc: function (options, properties) {
+        var options = options || {};
+        var n = (options.numTriangles || 24)|0;
+        var vertices = [];
+        var faces = [];
+        var normals = [];
+        var texCoords = [];
+        vertices.push([0,0,0]);
+        normals.push([0,0,1]);
+        texCoords.push([0.5,0.5]);
+        for (var i = 0; i < n; ++ i) {
+            var x = Math.cos(i*2*Math.PI/n);
+            var y = Math.sin(i*2*Math.PI/n);
+            vertices.push([x, y, 0]);
+            normals.push([0,0,1]);
+            texCoords.push([(x+1)/2, 1-(y+1)/2]);
+            if (i > 0)
+                faces.push([0,i,i+1]);
+        }
+        faces.push([0,i,1]);
+        return augment({
+            mesh: {
+                vertices: vertices,
+                normals: normals,
+                texCoords: texCoords,
+                faces: faces,
+                texture: 'loadingtexture.jpg'
+            }
         }, properties);
     }
 };
