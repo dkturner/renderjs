@@ -32,11 +32,9 @@ function Renderer(gl, width, height, resources) {
 
     function render(time) {
         model.identity();
-        camera.push();
-        camera.invert();
-        currentProgram.cameraMatrix = camera;
-        camera.pop();
-        currentProgram.cameraPosition = camera.transform(0, 0, 0);
+        cameraPosition = cameraToModel.transform(0, 0, 0);
+        currentProgram.cameraMatrix = modelToCamera;
+        currentProgram.cameraPosition = cameraPosition;
         lights = gatherLights();
         currentProgram.numberOfLights = lights.types.length;
         currentProgram.lightPositions = lights.positions;
@@ -46,7 +44,6 @@ function Renderer(gl, width, height, resources) {
         renderer.frameCount++;
     }
 
-    var lightsMatrix = new MatrixStack();
     function gatherLights() {
         // TODO: occlusion
         var types = [];
@@ -197,7 +194,8 @@ function Renderer(gl, width, height, resources) {
         }
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.faceBuffer);
         gl.drawElements(gl.TRIANGLES, mesh.faceCount, gl.UNSIGNED_SHORT, 0);
-        if (program.normalMapping) {
+        if (mesh.normalMap) {
+            program.normalMapping = false;
             program.uVector = null;
             program.vVector = null; // turn these off
         }
@@ -205,6 +203,91 @@ function Renderer(gl, width, height, resources) {
 
     function getRenderData(node) {
         return node.__renderData || (node.__renderData = createRenderData(node));
+    }
+
+    function registerBuiltInShaderData(program) {
+        program.registerVertexAttrib('vertexPosition', gl.FLOAT, 3);
+        program.registerVertexAttrib('vertexNormal', gl.FLOAT, 3);
+        program.registerVertexAttrib('textureCoord', gl.FLOAT, 2);
+        program.registerVertexAttrib('uVector', gl.FLOAT, 3);
+        program.registerVertexAttrib('vVector', gl.FLOAT, 3);
+        program.registerUniformMatrix('modelMatrix');
+        program.registerUniformMatrix('cameraMatrix');
+        program.registerUniformMatrix('viewportMatrix');
+        program.registerUniformFloat3('cameraPosition');
+        program.registerUniformInt('numberOfLights');
+        program.registerUniformFloat3Array('lightPositions');
+        program.registerUniformFloat3Array('lightColors');
+    }
+
+    function createCustomShader(shader, files) {
+        var oldProgram = currentProgram;
+        try {
+            var program = new Shader(renderer.gl, files[shader.vertex], files[shader.fragment]);
+            program.use();
+            registerBuiltInShaderData(program);
+            if (shader.uniforms) {
+                for (var k in shader.uniforms) {
+                    var type, defValue;
+                    if (typeof shader.uniforms[k] == 'string')
+                        type = shader.uniforms[k], defValue = undefined;
+                    else
+                        type = shader.uniforms[k].type, defValue = shader.uniforms[k].default;
+                    switch (type) {
+                        case 'mat4':
+                            program.registerUniformMatrix(k);
+                            break;
+                        case 'int':
+                        case 'bool':
+                            program.registerUniformInt(k);
+                            break;
+                        case 'float':
+                            program.registerUniformFloat(k);
+                            break;
+                        case 'complex':
+                            program.registerUniformComplex(k);
+                            defValue = new Complex(defValue);
+                            break;
+                        case 'vec3':
+                            program.registerUniformFloat3(k);
+                            break;
+                        case 'vec3[]':
+                            program.registerUniformFloat3Array(k);
+                            break;
+                        default:
+                            renderer.onerror({error: 'unsupported uniform type', reason: type});
+                            continue;
+                    }
+                    if (typeof defValue != undefined)
+                        program[k] = defValue;
+                }
+            }
+            if (shader.attributes) {
+                for (var k in shader.attributes) {
+                    var type, size = shader.attributes[k].size | 0;
+                    switch (shader.attributes[k].type) {
+                        case 'float':  type = gl.FLOAT; break;
+                        case 'int':    type = gl.INT; break;
+                        case 'double': type = gl.DOUBLE; break;
+                        case 'uint':   type = gl.UNSIGNED_INT; break;
+                        case 'short':  type = gl.SHORT; break;
+                        case 'ushort': type = gl.UNSIGNED_SHORT; break;
+                        default:
+                            renderer.onerror({
+                                error: 'unsupported vertex attribute type',
+                                reason: shader.attributes[k].type});
+                            continue;
+                    }
+                    program.registerVertexAttrib(k, size, type);
+                }
+            }
+            return program;
+        } catch (x) {
+            renderer.onerror(x);
+        } finally {
+            currentProgram = oldProgram;
+            currentProgram.use();
+        }
     }
 
     function createRenderData(node) {
@@ -270,6 +353,23 @@ function Renderer(gl, width, height, resources) {
                         fn = fn2;
                 }
                 result.transform = fn;
+            }
+        }
+        if (node.shader) {
+            if (node.shader.vertex && node.shader.fragment) {
+                var downloads = {}
+                downloads[node.shader.vertex] = renderer.resources.file;
+                downloads[node.shader.fragment] = renderer.resources.file;
+                renderer.resources.all(downloads).then(function (files) {
+                    result.program = createCustomShader(node.shader, files);
+                });
+                if (node.shader.textureUnits)
+                    result.textureUnits = node.shader.textureUnits;
+            }
+            if (node.shader.parameters) {
+                result.uniforms = result.uniforms || {}
+                for (var k in node.shader.parameters)
+                    result.uniforms[k] = createEvaluator(node.shader.parameters[k]);
             }
         }
         if (node.material) {
@@ -408,7 +508,20 @@ function Renderer(gl, width, height, resources) {
     function renderNode(program, node, time) {
         var data = getRenderData(node);
         var oldUniforms = null;
+        var oldProgram = null;
         var shouldRenderEdges = data.flags && data.flags.renderEdges && data.flags.renderEdges();
+        if (data.program) {
+            oldProgram = program;
+            program = data.program;
+            program.use();
+            // set standard uniforms
+            program.cameraMatrix = oldProgram.cameraMatrix;
+            program.viewportMatrix = oldProgram.viewportMatrix;
+            // program.modelMatrix = model;  // this will be set later
+            program.numberOfLights = lights.types.length;
+            program.lightPositions = lights.positions;
+            program.lightColors = lights.colors;
+        }
         if (data.uniforms) {
             oldUniforms = {};
             for (var k in data.uniforms) {
@@ -417,6 +530,7 @@ function Renderer(gl, width, height, resources) {
                 program[k] = evaluator();
             }
         }
+        // TODO: vertex attrib bindings
         if (data.transform) {
             model.push();
             data.transform(model);
@@ -431,9 +545,9 @@ function Renderer(gl, width, height, resources) {
             data.mesh.draw(data.mesh, program);
             if (program.wireframe)
                 endWireframe();
+            if (!program.wireframe && shouldRenderEdges)
+                renderEdges(program, node, data);
         }
-        if (!program.wireframe && shouldRenderEdges)
-            renderEdges(program, node, data);
         if (node.children)
             renderNodeList(program, node.children, time);
         if (data.transform)
@@ -441,6 +555,9 @@ function Renderer(gl, width, height, resources) {
         if (oldUniforms) {
             for (var k in oldUniforms)
                 program[k] = oldUniforms[k];
+        }
+        if (oldProgram) {
+            oldProgram.use();
         }
     }
 
@@ -642,6 +759,7 @@ function Renderer(gl, width, height, resources) {
     var renderFlags = {};
     var pendingResources = [];
     var lights = [];
+    var lightsMatrix = new MatrixStack();
     var preprocessed;
     var standardProgram;
     var wireframePostprocProgram;
@@ -649,8 +767,10 @@ function Renderer(gl, width, height, resources) {
     var loadingTexture;
     var animationsInProgress = 0;
     var model = new MatrixStack();
-    var camera = new MatrixStack();
+    var modelToCamera = new MatrixStack();
     var viewport = new MatrixStack();
+    var cameraToModel = new MatrixStack();
+    var cameraPosition;
 
     // Initialization
     var extensions = {
@@ -667,23 +787,12 @@ function Renderer(gl, width, height, resources) {
         'loadingtexture.jpg': resources.image,
     }).then(function (data) {
         standardProgram = new Shader(gl, data['std-vertex.es2'], data['std-fragment.es2']);
+        registerBuiltInShaderData(standardProgram);
         standardProgram.registerFlag('wireframe');
         standardProgram.registerFlag('renderEdges');
         standardProgram.setSampler('uTexture', 0);
         standardProgram.setSampler('uNormalMap', 1);
-        standardProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 3);
-        standardProgram.registerVertexAttrib('vertexNormal', gl.FLOAT, 3);
-        standardProgram.registerVertexAttrib('textureCoord', gl.FLOAT, 2);
-        standardProgram.registerVertexAttrib('uVector', gl.FLOAT, 3);
-        standardProgram.registerVertexAttrib('vVector', gl.FLOAT, 3);
         standardProgram.registerUniformInt('normalMapping');
-        standardProgram.registerUniformMatrix('modelMatrix');
-        standardProgram.registerUniformMatrix('cameraMatrix');
-        standardProgram.registerUniformMatrix('viewportMatrix');
-        standardProgram.registerUniformFloat3('cameraPosition');
-        standardProgram.registerUniformInt('numberOfLights');
-        standardProgram.registerUniformFloat3Array('lightPositions');
-        standardProgram.registerUniformFloat3Array('lightColors');
         standardProgram.registerUniformComplex('refractiveIndex');
         standardProgram.registerUniformFloat('gloss');
 
@@ -705,7 +814,8 @@ function Renderer(gl, width, height, resources) {
 
     preprocessed = createFramebuffer(true);
     viewport.perspective(30, +width/+height, 1, 50);
-    camera.translate(0, 0, 10);
+    cameraToModel.translate(0, 0, 10);
+    modelToCamera.translate(0, 0, -10);
 
     // Public interface
     this.time = 0; // in seconds
@@ -773,6 +883,8 @@ function Renderer(gl, width, height, resources) {
             d.transform(m);
         return m;
     }
+    // events
+    this.onerror = function (err) { }
 }
 
 function createRenderer(canvas, resourcePath) {

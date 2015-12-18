@@ -12,7 +12,7 @@ function Shader(gl, vertexProgram, fragmentProgram) {
     gl.shaderSource(shader, vertexProgram);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-        throw {message: 'invalid shader', reason: gl.getShaderInfoLog(shader)};
+        throw {message: 'invalid vertex shader', reason: gl.getShaderInfoLog(shader)};
     var warnings = gl.getShaderInfoLog(shader);
     if (warnings)
         console.log(warnings);
@@ -21,12 +21,14 @@ function Shader(gl, vertexProgram, fragmentProgram) {
     gl.shaderSource(shader, fragmentProgram);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-        throw {message: 'invalid shader', reason: gl.getShaderInfoLog(shader)};
+        throw {message: 'invalid fragment shader', reason: gl.getShaderInfoLog(shader)};
     warnings = gl.getShaderInfoLog(shader);
     if (warnings)
         console.log(warnings);
     gl.attachShader(program, shader);
     gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+        throw {message: 'program filed to link', reason: gl.getProgramInfoLog (program)};
 
     this.glProgram = program;
 
