@@ -42,6 +42,7 @@ function Renderer(gl, width, height, resources) {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         renderNodeList(currentProgram, rootNodes, time);
         renderer.frameCount++;
+        renderer.dirty = false;
     }
 
     function gatherLights() {
@@ -622,7 +623,8 @@ function Renderer(gl, width, height, resources) {
     }
 
     function repaintRequired() {
-        // TODO
+        renderer.dirty = true;
+        renderer.onrepaintrequired();
     }
 
     function orThrowError(error) {
@@ -751,6 +753,7 @@ function Renderer(gl, width, height, resources) {
     // Private variables
     var renderer = this;
     this.gl = gl;
+    this.dirty = false;
     this.resources = resources;
     var sysTime0, renderTime0;
     var rootNodes = [];
@@ -843,7 +846,11 @@ function Renderer(gl, width, height, resources) {
     this.resize = function (w, h) {
         width = w;
         height = h;
-        // TODO
+        viewport.perspective(30, +width/+height, 1, 50);
+        wireframePostprocProgram.setUniform2f('uViewportSize', width, height);
+        preprocessed = createFramebuffer(true);
+        gl.viewport(0, 0, width, height);
+        repaintRequired();
     }
     this.addNode = function (node, parent) {
         if (typeof parent != 'undefined')
@@ -852,6 +859,7 @@ function Renderer(gl, width, height, resources) {
             rootNodes.push(node);
         node.parent = parent;
         createRenderData(node);
+        repaintRequired();
     }
     this.removeNode = function (node) {
         var container = rootNodes;
@@ -862,6 +870,7 @@ function Renderer(gl, width, height, resources) {
             container.splice(idx, 1);
             releaseRenderData(node);
         }
+        repaintRequired();
     }
     this.bindParameter = function (name, fn) {
         // actually no magic here, just psychology
@@ -893,6 +902,7 @@ function Renderer(gl, width, height, resources) {
     }
     // events
     this.onerror = function (err) { }
+    this.onrepaintrequired = function () { }
 }
 
 function createRenderer(canvas, resourcePath) {
