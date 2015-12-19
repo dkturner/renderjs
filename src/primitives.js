@@ -82,7 +82,7 @@ var Primitives = {
                     [ 0.5,-0.5,-0.5], [-0.5,-0.5,-0.5], [-0.5, 0.5,-0.5], [ 0.5, 0.5,-0.5]  // back
                 ],
                 texCoords: texCoords,
-                texture: 'loadingtexture.jpg',
+                texture: 'loadingtexture.png',
                 faces: [
                     [0,1,2],[2,3,0], [4,5,6],[6,7,4], [8,9,10],[10,11,8],
                     [12,13,14],[14,15,12], [16,17,18],[18,19,16], [20,21,22],[22,23,20]
@@ -134,7 +134,7 @@ var Primitives = {
         }
         // This tessellation produces t = 20 * 4^s triangles, where s is the number of subdivisions.
         var s = Math.round(Math.log(options.targetTriangles/20)/Math.log(4)) |0;
-        var mesh = { vertices: [], normals: [], texCoords: [], faces: [], texture: 'loadingtexture.jpg' };
+        var mesh = { vertices: [], normals: [], texCoords: [], faces: [], texture: 'loadingtexture.png' };
         for (var i = 0; i < dodecFaces.length; ++ i) {
             subdivide(
                 dodecVertices[dodecFaces[i][0]],
@@ -171,7 +171,7 @@ var Primitives = {
                 normals: normals,
                 texCoords: texCoords,
                 faces: faces,
-                texture: 'loadingtexture.jpg'
+                texture: 'loadingtexture.png'
             }
         }, properties);
     }

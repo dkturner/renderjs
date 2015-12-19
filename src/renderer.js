@@ -784,7 +784,7 @@ function Renderer(gl, width, height, resources) {
         'std-fragment.es2': resources.file,
         'wfm-vertex.es2': resources.file,
         'wfm-fragment.es2': resources.file,
-        'loadingtexture.jpg': resources.image,
+        'loadingtexture.png': resources.image,
     }).then(function (data) {
         standardProgram = new Shader(gl, data['std-vertex.es2'], data['std-fragment.es2']);
         registerBuiltInShaderData(standardProgram);
@@ -807,7 +807,7 @@ function Renderer(gl, width, height, resources) {
 
         currentProgram = standardProgram;
 
-        loadingTexture = data['loadingtexture.jpg'];
+        loadingTexture = data['loadingtexture.png'];
 
         return true;
     });
@@ -836,6 +836,14 @@ function Renderer(gl, width, height, resources) {
         ready.then(function () {
             renderAt(time);
         }, orThrowError);
+    }
+    this.render = function () {
+        this.renderAt(this.time);
+    }
+    this.resize = function (w, h) {
+        width = w;
+        height = h;
+        // TODO
     }
     this.addNode = function (node, parent) {
         if (typeof parent != 'undefined')
@@ -895,9 +903,9 @@ function createRenderer(canvas, resourcePath) {
                 return reject('no webgl');
             var resources = new Resources(resourcePath);
             // the comment below is used by the build system
-            //!EMBED resources: loadingtexture.jpg, std-vertex.es2, std-fragment.es2, wfm-vertex.es2, wfm-fragment.es2
+            //!EMBED resources: loadingtexture.png, std-vertex.es2, std-fragment.es2, wfm-vertex.es2, wfm-fragment.es2
             resources.all({
-                'loadingtexture.jpg': resources.image,
+                'loadingtexture.png': resources.image,
                 'std-vertex.es2': resources.file,
                 'std-fragment.es2': resources.file,
                 'wfm-vertex.es2': resources.file,

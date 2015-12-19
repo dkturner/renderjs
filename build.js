@@ -441,7 +441,7 @@ function minify(source, output, options) {
                 this.visit(node.handler);
             if (node.finalizer) {
                 output('finally');
-                this.visit(node.handler);
+                this.visit(node.finalizer);
             }
         }
         this.ThisExpression = function (node) {
