@@ -32,13 +32,12 @@ function Renderer(gl, width, height, resources) {
 
     function render(time) {
         model.identity();
-        cameraPosition = cameraToModel.transform(0, 0, 0);
-        currentProgram.cameraMatrix = modelToCamera;
-        currentProgram.cameraPosition = cameraPosition;
+        currentProgram.cameraMatrix = camera;
         lights = gatherLights();
         currentProgram.numberOfLights = lights.types.length;
         currentProgram.lightPositions = lights.positions;
         currentProgram.lightColors = lights.colors;
+        currentProgram.ambientLight = lights.ambient;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         renderNodeList(currentProgram, rootNodes, time);
         renderer.frameCount++;
@@ -50,6 +49,7 @@ function Renderer(gl, width, height, resources) {
         var types = [];
         var positions = [];
         var colors = [];
+        var ambient = [ 0.0, 0.0, 0.0 ];
         lightsMatrix.identity();
         function addLights(data) {
             if (data.transform && (data.lights || data.childrenWithLights)) {
@@ -59,6 +59,12 @@ function Renderer(gl, width, height, resources) {
             if (data.lights) {
                 for (var i = 0; i < data.lights.length; ++ i) {
                     var light = data.lights[i];
+                    if (light.type == 'ambient') {
+                        ambient[0] += light.color[0]();
+                        ambient[1] += light.color[1]();
+                        ambient[2] += light.color[2]();
+                        continue;
+                    }
                     types.push(light.type);
                     var pos = lightsMatrix.transform(light.position[0](), light.position[1](), light.position[2]());
                     positions.push(pos[0]); positions.push(pos[1]); positions.push(pos[2]);
@@ -81,7 +87,8 @@ function Renderer(gl, width, height, resources) {
         return {
             types: types,
             positions: positions,
-            colors: colors
+            colors: colors,
+            ambient: ambient
         };
     }
 
@@ -215,10 +222,10 @@ function Renderer(gl, width, height, resources) {
         program.registerUniformMatrix('modelMatrix');
         program.registerUniformMatrix('cameraMatrix');
         program.registerUniformMatrix('viewportMatrix');
-        program.registerUniformFloat3('cameraPosition');
         program.registerUniformInt('numberOfLights');
         program.registerUniformFloat3Array('lightPositions');
         program.registerUniformFloat3Array('lightColors');
+        program.registerUniformFloat3('ambientLight');
     }
 
     function createCustomShader(shader, files) {
@@ -361,11 +368,25 @@ function Renderer(gl, width, height, resources) {
                 var downloads = {}
                 downloads[node.shader.vertex] = renderer.resources.file;
                 downloads[node.shader.fragment] = renderer.resources.file;
+                result.pending = true;
                 renderer.resources.all(downloads).then(function (files) {
                     result.program = createCustomShader(node.shader, files);
+                    result.pending = false;
+                    repaintRequired();
                 });
                 if (node.shader.textureUnits)
                     result.textureUnits = node.shader.textureUnits;
+                if (node.shader.blend) {
+                    switch (node.shader.blend) {
+                        case 'default':
+                        default:
+                            result.blend = function (gl) {
+                                gl.enable(gl.BLEND);
+                                gl.blendEquation(gl.FUNC_ADD);
+                                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                            };
+                    }
+                }
             }
             if (node.shader.parameters) {
                 result.uniforms = result.uniforms || {}
@@ -393,19 +414,24 @@ function Renderer(gl, width, height, resources) {
                 var type = light.type;
                 if (type == 'point')
                     type = 1;
-                return {
+                var lightData = {
                     type: type,
-                    position: [
+                };
+                if (light.position) {
+                    lightData.position = [
                         createEvaluator(light.position[0]),
                         createEvaluator(light.position[1]),
                         createEvaluator(light.position[2]),
-                    ],
-                    color: [
+                    ];
+                }
+                if (light.color) {
+                    lightData.color = [
                         createEvaluator(light.color[0]),
                         createEvaluator(light.color[1]),
                         createEvaluator(light.color[2]),
-                    ],
+                    ];
                 }
+                return lightData;
             });
             var d = result;
             for (var p = node.parent; p && p.__renderData; p = p.parent) {
@@ -448,7 +474,7 @@ function Renderer(gl, width, height, resources) {
     function endWireframe() {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         wireframePostprocProgram.use();
-        wireframePostprocProgram.perspective = viewport;
+        wireframePostprocProgram.viewportMatrix = viewport;
         wireframePostprocProgram.vertexPosition = wireframePostprocProgram.vertices;
         wireframePostprocProgram.textureCoord = wireframePostprocProgram.texCoords;
         gl.activeTexture(gl.TEXTURE0);
@@ -508,8 +534,11 @@ function Renderer(gl, width, height, resources) {
 
     function renderNode(program, node, time) {
         var data = getRenderData(node);
+        if (data.pending)
+            return;
         var oldUniforms = null;
         var oldProgram = null;
+        var oldBlend = null;
         var shouldRenderEdges = data.flags && data.flags.renderEdges && data.flags.renderEdges();
         if (data.program) {
             oldProgram = program;
@@ -517,7 +546,9 @@ function Renderer(gl, width, height, resources) {
             program.use();
             // set standard uniforms
             program.cameraMatrix = oldProgram.cameraMatrix;
+            program.cameraMatrixInverse = oldProgram.cameraMatrixInverse;
             program.viewportMatrix = oldProgram.viewportMatrix;
+            program.viewportMatrixInverse = oldProgram.viewportMatrixInverse;
             // program.modelMatrix = model;  // this will be set later
             program.numberOfLights = lights.types.length;
             program.lightPositions = lights.positions;
@@ -536,6 +567,11 @@ function Renderer(gl, width, height, resources) {
             model.push();
             data.transform(model);
         }
+        if (data.blend) {
+            oldBlend = currentBlend;
+            currentBlend = data.blend;
+            currentBlend(gl);
+        }
         if (data.mesh) {
             program.modelMatrix = model;
             if (program.wireframe) {
@@ -551,6 +587,10 @@ function Renderer(gl, width, height, resources) {
         }
         if (node.children)
             renderNodeList(program, node.children, time);
+        if (oldBlend) {
+            currentBlend = oldBlend;
+            currentBlend(gl);
+        }
         if (data.transform)
             model.pop();
         if (oldUniforms) {
@@ -770,10 +810,11 @@ function Renderer(gl, width, height, resources) {
     var loadingTexture;
     var animationsInProgress = 0;
     var model = new MatrixStack();
-    var modelToCamera = new MatrixStack();
+    var camera = new MatrixStack();
     var viewport = new MatrixStack();
-    var cameraToModel = new MatrixStack();
-    var cameraPosition;
+    var currentBlend = function (gl) {
+        gl.disable(gl.BLEND);
+    }
 
     // Initialization
     var extensions = {
@@ -803,7 +844,6 @@ function Renderer(gl, width, height, resources) {
         wireframePostprocProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 2);
         wireframePostprocProgram.registerVertexAttrib('textureCoord', gl.FLOAT, 2);
         wireframePostprocProgram.setSampler('uWireframe', 0);
-        wireframePostprocProgram.registerUniformMatrix('perspective');
         wireframePostprocProgram.setUniform2f('uViewportSize', width, height);
         wireframePostprocProgram.vertices = unpackBuffer([[-1,-1],[1,-1],[1,1],[1,1],[-1,1],[-1,-1]], 2);
         wireframePostprocProgram.texCoords = unpackBuffer([[0,0],[1,0],[1,1],[1,1],[0,1],[0,0]], 2);
@@ -814,11 +854,17 @@ function Renderer(gl, width, height, resources) {
 
         return true;
     });
+    function setViewportFov(fov, near, far) {
+        viewport.reset();
+        viewport.perspective(30, +width/+height, near, far);
+        viewport.push();
+        viewport.invert();
+        viewport.swap();
+    }
 
     preprocessed = createFramebuffer(true);
-    viewport.perspective(30, +width/+height, 1, 50);
-    cameraToModel.translate(0, 0, 10);
-    modelToCamera.translate(0, 0, -10);
+    setViewportFov(30, 1, 50);
+    camera.translate(0, 0, -10);
 
     // Public interface
     this.time = 0; // in seconds
@@ -846,7 +892,7 @@ function Renderer(gl, width, height, resources) {
     this.resize = function (w, h) {
         width = w;
         height = h;
-        viewport.perspective(30, +width/+height, 1, 50);
+        setViewportFov(30, 1, 50); // todo
         wireframePostprocProgram.setUniform2f('uViewportSize', width, height);
         preprocessed = createFramebuffer(true);
         gl.viewport(0, 0, width, height);
@@ -875,6 +921,12 @@ function Renderer(gl, width, height, resources) {
     this.bindParameter = function (name, fn) {
         // actually no magic here, just psychology
         this.parameters[name] = fn;
+    }
+    this.setCameraTransform = function (m) {
+        camera.reset();
+        camera.load(m);
+        camera.invert();
+        repaintRequired();
     }
     this.setTexture = function (node, texture) {
         this.resources.texture(texture).then (function (tex) {

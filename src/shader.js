@@ -89,21 +89,30 @@ function Shader(gl, vertexProgram, fragmentProgram) {
     }
 
     this.registerUniformMatrix = function (name) {
-        var loc = gl.getUniformLocation(program, makeUniformName(name));
+        var uName = makeUniformName(name);
+        var loc = gl.getUniformLocation(program, uName);
+        var invLoc = gl.getUniformLocation(program, uName + 'Inverse');
         var value;
-        if (loc) {
+        if (loc || invLoc) {
             Object.defineProperty(this, name, {
                 get: function () {
                     return value;
                 },
                 set: function (newValue) {
                     value = newValue;
-                    gl.uniformMatrix4fv(loc, false, value.getData());
+                    if (loc)
+                        gl.uniformMatrix4fv(loc, false, value.getData());
+                    if (invLoc) {
+                        value.push();
+                        value.invert();
+                        gl.uniformMatrix4fv(invLoc, false, value.getData());
+                        value.pop();
+                    }
                     return value;
                 }
             });
         } else {
-            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+            console.log('WARNING: shader has no uniform ' + uName);
         }
     }
 

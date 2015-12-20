@@ -3,7 +3,7 @@ precision highp float;
 
 uniform sampler2D uWireframe;
 uniform vec2 uViewportSize;
-uniform mat4 uPerspective;
+uniform mat4 uViewportMatrix;
 
 varying vec2 vTextureCoord;
 
@@ -35,15 +35,15 @@ void main(void) {
         float depthRep = pix.a;
         float normalizedDepth = (exp(depthRep) - 1.0)/(exp(1.0) - 1.0);
         normalizedDepth = (exp(normalizedDepth) - 1.0)/(exp(1.0) - 1.0);
-        vec4 f_ = vec4(0,0,1,-1)*uPerspective;
-        vec4 n_ = vec4(0,0,1,1)*uPerspective;
+        vec4 f_ = vec4(0,0,1,-1)*uViewportMatrix;
+        vec4 n_ = vec4(0,0,1,1)*uViewportMatrix;
         float np = n_.w/n_.z;
         float fp = f_.w/f_.z;
         float camNear = n_.w/n_.z;
         float camFar = f_.w/f_.z;
         //vNormalizedDepth = (cameraSpace.z + camNear) / (camNear - camFar);
         float cameraZ = normalizedDepth * (camNear - camFar) - camNear;
-        vec4 clipZ = (uPerspective * vec4(0, 0, cameraZ, 1));
+        vec4 clipZ = (uViewportMatrix * vec4(0, 0, cameraZ, 1));
         float ndc_depth = clipZ.z / clipZ.w;
         float far = gl_DepthRange.far;
         float near = gl_DepthRange.near;

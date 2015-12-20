@@ -13,12 +13,13 @@ uniform bool uNormalMapping;
 uniform bool uWireframe;
 uniform bool uRenderEdges;
 uniform mat4 uViewportMatrix;
-uniform vec3 uCameraPosition;
+uniform mat4 uCameraMatrixInverse;
 uniform int uNumberOfLights;
 uniform vec3 uLightPositions[MAX_LIGHTS];
 uniform vec3 uLightColors[MAX_LIGHTS];
 uniform Complex uRefractiveIndex;
 uniform float uAmbientRefractiveIndex;
+uniform vec3 uAmbientLight;
 uniform float uGloss;
 
 varying lowp vec4 vColor;
@@ -46,12 +47,16 @@ float modifiedBessel_0(float x) {
    }
 }
 
+vec3 wnorm(vec4 x) {
+    return x.xyz / x.w;
+}
+
 void main(void) {
     if (!gl_FrontFacing)
         discard;
     if (uRenderEdges) {
         float z = sqrt(vPosition.z / 2.0 + 0.5);
-        gl_FragColor = vec4(z, z, z, 1);
+        gl_FragColor = vec4(z, z, z, 1.0);
     } else if (uWireframe) {
         float depthRep = log(vNormalizedDepth * (exp(1.0) - 1.0) + 1.0);
         depthRep = log(depthRep * (exp(1.0) - 1.0) + 1.0);
@@ -60,6 +65,7 @@ void main(void) {
         vec4 textureColor = texture2D(uTexture, vec2(vTextureCoord.s, vTextureCoord.t));
         vec4 fragColor;
         if (uNumberOfLights > 0) {
+            vec3 cameraPosition = wnorm(uCameraMatrixInverse * vec4(0.0, 0.0, 0.0, 1.0));
             vec3 normal = normalize(vNormal);
             if (uNormalMapping) {
                 lowp vec4 displacement = texture2D(uNormalMap, vec2(vTextureCoord.s, vTextureCoord.t));
@@ -75,7 +81,7 @@ void main(void) {
                 vec3 lightColor = uLightColors[i];
                 vec3 lightPosition = uLightPositions[i];
                 if (lightColor.r == 0.0 && lightColor.g == 0.0 && lightColor.b == 0.0)
-                    lightColor = vec3(1,1,1);
+                    lightColor = vec3(1.0,1.0,1.0);
                 vec3 incident = normalize(vModelSpacePosition - lightPosition);
                 vec3 reflective = reflect(incident, normal);
                 float n1 = uAmbientRefractiveIndex;
@@ -109,7 +115,7 @@ void main(void) {
                 // PDF is of course 1, so energy is conserved.  We can identify uGloss = 1 => k = ∞ and
                 // uGloss = 0 => k = 0
                 float S = 0.0;
-                vec3 cameraVec = normalize(uCameraPosition - vModelSpacePosition);
+                vec3 cameraVec = normalize(cameraPosition - vModelSpacePosition);
                 float cos_t = dot(cameraVec, reflective);
                 float k = 2.718/(1.0-uGloss)-2.718;
                 if (uGloss > 0.97)  // in theory, what happens here is all the light goes along the reflective vector.
@@ -129,7 +135,8 @@ void main(void) {
                 float s = S * energyIncoming;
                 totalLight += d * textureColor.rgb * lightColor.rgb + s * lightColor.rgb;
             }
-            fragColor = vec4(totalLight.rgb, 1);
+            totalLight += uAmbientLight.rgb * textureColor.rgb;
+            fragColor = vec4(totalLight.rgb, 1.0);
         } else {
             fragColor = textureColor;
         }
