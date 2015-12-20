@@ -58,6 +58,7 @@ void main(void) {
         float z = sqrt(vPosition.z / 2.0 + 0.5);
         gl_FragColor = vec4(z, z, z, 1.0);
     } else if (uWireframe) {
+        // try to flatten the depth out a bit so it represents better in limited bits
         float depthRep = log(vNormalizedDepth * (exp(1.0) - 1.0) + 1.0);
         depthRep = log(depthRep * (exp(1.0) - 1.0) + 1.0);
         gl_FragColor = vec4(vColor.rgb, depthRep);

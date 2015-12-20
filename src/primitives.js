@@ -49,7 +49,7 @@ function findOrAddVertex(mesh, v, n, t) {
 }
 
 var Primitives = {
-    cube: function (options, properties) {
+    cube: function (properties, options) {
         var texCoords;
         options = options || {};
         if (options.projection == 'square') {
@@ -90,10 +90,10 @@ var Primitives = {
             }
         }, properties);
     },
-    sphere: function (options, properties) {
+    sphere: function (properties, options) {
         options = options || {};
         options.targetTriangles = options.targetTriangles || 320;
-        options.projection = options.projection || mappings.HammerAitoff;
+        options.projection = options.projection || mappings.Polar;
         if (typeof options.projection == 'string') {
             switch (options.projection) {
                 case 'polar':
@@ -145,7 +145,7 @@ var Primitives = {
             mesh: mesh
         }, properties);
     },
-    disc: function (options, properties) {
+    disc: function (properties, options) {
         var options = options || {};
         var n = (options.numTriangles || 24)|0;
         var vertices = [];

@@ -49,7 +49,7 @@ var scene = {
         ['rotate', '$tilt', 1, 0, 0],
     ],
     children: [
-        renderjs.Primitives.cube({}, {
+        renderjs.Primitives.cube({
             transform: [
                 ['translate', -2, 0, 0],
                 ['scale', 2, 2, 2],
@@ -61,9 +61,6 @@ var scene = {
             }
         }),
         renderjs.Primitives.sphere({
-            targetTriangles: 900,
-            projection: 'polar'
-        }, {
             transform: [
                 ['translate', 2, 0, 0],
                 ['scale', 1.5, 1.5, 1.5],
@@ -73,7 +70,7 @@ var scene = {
                 texture: 'earth_polar.jpg',
                 normalMap: 'earth_polar_nm.jpg'
             }
-        }),
+        }, { targetTriangles: 900 }),
     ]
 };
 var canvas = $('canvas')[0];

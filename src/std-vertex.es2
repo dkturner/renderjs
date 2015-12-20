@@ -9,6 +9,7 @@ attribute vec3 aVVector;
 uniform mat4 uModelMatrix;
 uniform mat4 uCameraMatrix;
 uniform mat4 uViewportMatrix;
+uniform mat4 uViewportMatrixInverse;
 uniform bool uWireframe;
 
 varying lowp vec4 vColor;
@@ -42,12 +43,7 @@ void main(void) {
     vec4 vVec = uModelMatrix * vec4(aVVector, 0.0);
     vVVector = vVec.xyz;
     if (uWireframe) {
-        // calculate the near and far planes in camera space
-        vec4 f_ = vec4(0.0, 0.0, 1.0, -1.0) * uViewportMatrix;
-        vec4 n_ = vec4(0.0, 0.0, 1.0,  1.0) * uViewportMatrix;
-        float camNear = n_.w/n_.z;
-        float camFar = f_.w/f_.z;
-        vNormalizedDepth = (cameraSpace.z + camNear) / (camNear - camFar);
+        vNormalizedDepth = clipSpace.z / clipSpace.w;
         vec4 c = uCameraMatrix * uModelMatrix * vec4(aVertexNormal, 0.0);
         vec3 cameraNormal = normalize(vec3(c.x, c.y, c.z));
         vColor = vec4(0.5*cameraNormal.xyz+vec3(0.5,0.5,0.5), 1.0);

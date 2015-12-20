@@ -34,35 +34,41 @@ renderjs.createRenderer(canvas).then(function (renderer) {
     renderer.parameters.tilt = 15.0;
     renderer.parameters.spin = 0.0;
     renderer.parameters.animate = 1;
-    var sphere1 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'hammer'});
-    sphere1.transform = [
-        ['translate', 0, 0, -20],
-        ['rotate', 'tilt', 1, 0, 0],
-        ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
-        ['scale', 5, 5, 5],
-    ];
-    sphere1.mesh.texture = 'earth_hammer.jpg';
-    renderer.addNode(sphere1);
+    renderer.addNode(renderjs.Primitives.sphere({
+        transform: [
+            ['translate', 0, 0, -20],
+            ['rotate', 'tilt', 1, 0, 0],
+            ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
+            ['scale', 5, 5, 5],
+        ],
+        mesh: {
+            texture: 'earth_hammer.jpg'
+        }
+    }, {targetTriangles: 900, projection:'hammer'}));
 
-    var sphere2 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'mercator'});
-    sphere2.transform = [
-        ['translate', -10, 0, -20],
-        ['rotate', 'tilt', 1, 0, 0],
-        ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
-        ['scale', 5, 5, 5],
-    ];
-    sphere2.mesh.texture = 'earth_mercator.jpg';
-    renderer.addNode(sphere2);
+    renderer.addNode(renderjs.Primitives.sphere({
+        transform: [
+            ['translate', -10, 0, -20],
+            ['rotate', 'tilt', 1, 0, 0],
+            ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
+            ['scale', 5, 5, 5],
+        ],
+        mesh: {
+            texture: 'earth_mercator.jpg'
+        }
+    }, {targetTriangles: 900, projection:'mercator'}));
 
-    var sphere3 = renderjs.Primitives.sphere({targetTriangles: 900, projection:'polar'});
-    sphere3.transform = [
-        ['translate', 10, 0, -20],
-        ['rotate', 'tilt', 1, 0, 0],
-        ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
-        ['scale', 5, 5, 5],
-    ];
-    sphere3.mesh.texture = 'earth_polar.jpg';
-    renderer.addNode(sphere3);
+    renderer.addNode(renderjs.Primitives.sphere({
+        transform: [
+            ['translate', 10, 0, -20],
+            ['rotate', 'tilt', 1, 0, 0],
+            ['rotate', 'if(animate,$time*360.0/12.0,spin)', 0, 1, 0],
+            ['scale', 5, 5, 5],
+        ],
+        mesh: {
+            texture: 'earth_polar.jpg'
+        }
+    }, {targetTriangles: 900, projection:'polar'}));
 
     renderer.resources.onresourcesloaded = renderer.start;
 
