@@ -536,6 +536,8 @@ function Renderer(gl, width, height, resources) {
         var data = getRenderData(node);
         if (data.pending)
             return;
+        if (renderer.onbeforerendernode)
+            renderer.onbeforerendernode(node, time, program);
         var oldUniforms = null;
         var oldProgram = null;
         var oldBlend = null;
@@ -600,6 +602,8 @@ function Renderer(gl, width, height, resources) {
         if (oldProgram) {
             oldProgram.use();
         }
+        if (renderer.onafterrendernode)
+            renderer.onafterrendernode(node, time, program);
     }
 
     function unpackBuffer(buffer, size, type, target, stride, offset, interior) {
@@ -839,6 +843,7 @@ function Renderer(gl, width, height, resources) {
         standardProgram.registerUniformInt('normalMapping');
         standardProgram.registerUniformComplex('refractiveIndex');
         standardProgram.registerUniformFloat('gloss');
+        standardProgram.registerUniformFloat4('highlightColor');
 
         wireframePostprocProgram = new Shader(gl, data['wfm-vertex.es2'], data['wfm-fragment.es2']);
         wireframePostprocProgram.registerVertexAttrib('vertexPosition', gl.FLOAT, 2);
@@ -955,6 +960,9 @@ function Renderer(gl, width, height, resources) {
     // events
     this.onerror = function (err) { }
     this.onrepaintrequired = function () { }
+    // don't use these two if you can possibly avoid it
+    this.onbeforerendernode = null;
+    this.onafterrendernode = null;
 }
 
 function createRenderer(canvas, resourcePath) {

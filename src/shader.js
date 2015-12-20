@@ -201,6 +201,28 @@ function Shader(gl, vertexProgram, fragmentProgram) {
         }
     }
 
+    this.registerUniformFloat4 = function (name) {
+        var loc = gl.getUniformLocation(program, makeUniformName(name));
+        var value;
+        if (loc) {
+            Object.defineProperty(this, name, {
+                get: function () {
+                    return value;
+                },
+                set: function () {
+                    if (typeof arguments[1] == 'undefined')
+                        value = [arguments[0][0], arguments[0][1], arguments[0][2], arguments[0][3]];
+                    else
+                        value = [arguments[0], arguments[1], arguments[2], arguments[3]];
+                    gl.uniform4f(loc, value[0], value[1], value[2], value[3]);
+                    return value;
+                }
+            });
+        } else {
+            console.log('WARNING: shader has no uniform ' + makeUniformName(name));
+        }
+    }
+
     this.registerUniformFloat3Array = function (name) {
         var loc = gl.getUniformLocation(program, makeUniformName(name));
         var value;

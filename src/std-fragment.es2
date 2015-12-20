@@ -20,6 +20,7 @@ uniform vec3 uLightColors[MAX_LIGHTS];
 uniform Complex uRefractiveIndex;
 uniform float uAmbientRefractiveIndex;
 uniform vec3 uAmbientLight;
+uniform vec4 uHighlightColor;
 uniform float uGloss;
 
 varying lowp vec4 vColor;
@@ -137,7 +138,7 @@ void main(void) {
                 totalLight += d * textureColor.rgb * lightColor.rgb + s * lightColor.rgb;
             }
             totalLight += uAmbientLight.rgb * textureColor.rgb;
-            fragColor = vec4(totalLight.rgb, 1.0);
+            fragColor = vec4((1.0 - uHighlightColor.a) * totalLight.rgb + uHighlightColor.a * uHighlightColor.rgb, 1.0);
         } else {
             fragColor = textureColor;
         }
