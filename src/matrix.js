@@ -560,6 +560,9 @@ var MatrixStack = (function () {
             asm.copy(count, count - 1);
             asm.copy(count - 1, 0);
         }
+        this.copyDown = function () {
+            asm.copy(count, count - 1);
+        }
         this.mul = function () {
             if (count < 2)
                 throw {error:'too few matrices on stack to multiply'};
@@ -714,12 +717,31 @@ var MatrixStack = (function () {
                 nulls: nullVectors
             };
         }
+        this.loadQuaternion = function (w, x, y, z, stackIndex) {
+            if (typeof y == 'undefined' && typeof w[1] != 'undefined') {
+                x = w[1];
+                y = w[2];
+                z = w[3];
+                w = w[0];
+                stackIndex = x;
+            }
+            var i = (count - (stackIndex|0)) << 4;
+            data[i+ 0] = 1 - 2*y*y - 2*z*z;  data[i+ 4] =   2*x*y - 2*z*w;    data[i+ 8] =   2*x*z + 2*y*w;
+            data[i+ 1] =   2*x*y + 2*z*w;    data[i+ 5] = 1 - 2*x*x - 2*z*z;  data[i+ 9] =   2*y*z - 2*x*w;
+            data[i+ 2] =   2*x*z - 2*y*w;    data[i+ 6] =   2*y*z + 2*x*w;    data[i+10] = 1 - 2*x*x - 2*y*y;
+            data[i+ 3] = 0; data[i+ 7] = 0; data[i+11] = 0;
+            data[i+12] = 0; data[i+13] = 0; data[i+14] = 0;
+            data[i+15] = 1;
+
+        }
         this.loadRowMajor = function (m, stackIndex) {
             // Note that we load in ROW-MAJOR format, which is the more intuitive format for matrices described
             // in code or textual data.
             var i = (count - (stackIndex|0)) << 4;
-            if (m instanceof MatrixStack)
-                m = m.getRowMajor();
+            if (m instanceof MatrixStack) {
+                //m = m.getRowMajor();
+                return this.load(m, stackIndex);
+            }
             if (typeof m[0] == 'undefined')
                 m = arguments;
             if (typeof m[0][0] != 'undefined') {
@@ -773,6 +795,10 @@ var MatrixStack = (function () {
                 [ data[i+ 8], data[i+ 9], data[i+10], data[i+11] ],
                 [ data[i+12], data[i+13], data[i+14], data[i+15] ]
             ];
+        }
+        this.reset = function () {
+            count = 1;
+            this.identity();
         }
         Object.defineProperty(this, 'length', {
             get: function () {
