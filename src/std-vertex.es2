@@ -30,7 +30,7 @@ void main(void) {
     vPosition = clipSpace;
     vCamSpacePosition = cameraSpace.xyz / cameraSpace.w;
     vModelSpacePosition = modelSpace.xyz / modelSpace.w;
-    // Actually the calculation below is not correct, see the discussion at
+    // Actually the calculation below is not correct, see for example the discussion at
     //   http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/
     // Also, irritatingly, WebGL (read GL ES) doesn't support the inverse() function.  And calculating
     // the inverse in Javascript for each mesh at every frame is likely to be slow.  So I'm sticking with

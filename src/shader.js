@@ -8,24 +8,24 @@ function Shader(gl, vertexProgram, fragmentProgram) {
     }
 
     var program = gl.createProgram();
-    var shader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(shader, vertexProgram);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-        throw {message: 'invalid vertex shader', reason: gl.getShaderInfoLog(shader)};
-    var warnings = gl.getShaderInfoLog(shader);
+    var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vertexShader, vertexProgram);
+    gl.compileShader(vertexShader);
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
+        throw {message: 'invalid vertex shader', reason: gl.getShaderInfoLog(vertexShader)};
+    var warnings = gl.getShaderInfoLog(vertexShader);
     if (warnings)
         console.log(warnings);
-    gl.attachShader(program, shader);
-    shader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(shader, fragmentProgram);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
-        throw {message: 'invalid fragment shader', reason: gl.getShaderInfoLog(shader)};
-    warnings = gl.getShaderInfoLog(shader);
+    gl.attachShader(program, vertexShader);
+    var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fragmentShader, fragmentProgram);
+    gl.compileShader(fragmentShader);
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
+        throw {message: 'invalid fragment shader', reason: gl.getShaderInfoLog(fragmentShader)};
+    warnings = gl.getShaderInfoLog(fragmentShader);
     if (warnings)
         console.log(warnings);
-    gl.attachShader(program, shader);
+    gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS))
         throw {message: 'program filed to link', reason: gl.getProgramInfoLog (program)};
@@ -34,6 +34,16 @@ function Shader(gl, vertexProgram, fragmentProgram) {
 
     this.use = function () {
         gl.useProgram(this.glProgram);
+    }
+
+    this.destroy = function () {
+        gl.useProgram(this.glProgram);
+        gl.detachShader(program, vertexShader);
+        gl.detachShader(program, fragmentShader);
+        gl.deleteShader(program, vertexShader);
+        gl.deleteShader(program, fragmentShader);
+        gl.useProgram(null);
+        gl.deleteProgram(program);
     }
 
     this.registerFlag = function(name, initValue) {

@@ -46,6 +46,14 @@ function Resources(resourcePath) {
         this[type].set = function (src, data) {
             cache[src] = data;
         }
+        this[type].forget = function (data) {
+            for (var k in cache) {
+                if (cache[k] === data) {
+                    delete cache[k];
+                    return;
+                }
+            }
+        }
     }
     this.all = function (resourceMap) {
         var promiseArray = [];

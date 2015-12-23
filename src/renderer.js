@@ -298,6 +298,16 @@ function Renderer(gl, width, height, resources) {
         }
     }
 
+    function incTextureRefs(texture) {
+        texture.refCount = (texture.refCount || 0) + 1;
+    }
+
+    function decTextureRefs(texture) {
+        texture.refCount = texture.refCount - 1;
+        if (texture.refCount == 0)
+            resources.texture.forget(texture);
+    }
+
     function createRenderData(node) {
         var result = {};
         if (node.id)
@@ -448,17 +458,28 @@ function Renderer(gl, width, height, resources) {
         return result;
     }
 
-    function releaseRenderData(node) {
+    function releaseRenderData(node, recursive) {
         var data = node.__renderData;
         if (node.id && nodesById[node.id] === node)
             delete nodesById[node.id];
         if (data) {
             if (data.mesh) {
-                gl.deleteBuffer(data.mesh.vertexBuffer);
-                // TODO!!
+                if (data.mesh.vertexBuffer) gl.deleteBuffer(data.mesh.vertexBuffer);
+                if (data.mesh.normalBuffer) gl.deleteBuffer(data.mesh.normalBuffer);
+                if (data.mesh.texCoords) gl.deleteBuffer(data.mesh.texCoords);
+                if (data.mesh.tangentSpace) {
+                    gl.deleteBuffer(data.mesh.tangentSpace.u);
+                    gl.deleteBuffer(data.mesh.tangentSpace.v);
+                }
+                if (data.mesh.faceBuffer) gl.deleteBuffer(data.mesh.faceBuffer);
+                if (data.mesh.texture) decTextureRefs(data.mesh.texture);
+                if (data.mesh.normalMap) decTextureRefs(data.mesh.normalMap);
             }
+            if (data.shader)
+                shader.destroy();
+            delete node.__renderData;
         }
-        if (node.children) {
+        if (recursive && node.children) {
             for (var i = 0; i < node.children.length; ++ i)
                 releaseRenderData(node.children[i]);
         }
@@ -915,11 +936,11 @@ function Renderer(gl, width, height, resources) {
     this.removeNode = function (node) {
         var container = rootNodes;
         if (node.parent)
-            container = node.parent;
+            container = node.parent.children;
         var idx = container.indexOf(node);
         if (idx >= 0) {
             container.splice(idx, 1);
-            releaseRenderData(node);
+            releaseRenderData(node, true);
         }
         repaintRequired();
     }
@@ -971,7 +992,11 @@ function createRenderer(canvas, resourcePath) {
             var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
             if (!gl)
                 return reject('no webgl');
-            var resources = new Resources(resourcePath);
+            var resources;
+            if (resourcePath instanceof Resources)
+                resources = resourcePath;
+            else
+                resources = new Resources(resourcePath);
             // the comment below is used by the build system
             //!EMBED resources: loadingtexture.png, std-vertex.es2, std-fragment.es2, wfm-vertex.es2, wfm-fragment.es2
             resources.all({
