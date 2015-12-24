@@ -7,6 +7,32 @@ function combinePath(base, path) {
     return base + path;
 }
 
+function httpFetch(url, progress) {
+    return new Promise(function (resolve, reject) {
+        function handleFailure(evt) {
+            if (typeof progress == 'function')
+                progress({completed: true});
+            reject(evt);
+        }
+        function handleSuccess(evt) {
+            if (typeof progress == 'function')
+                progress({completed: true});
+            resolve(xhr.responseText);
+        }
+        function handleProgress(evt) {
+            progress({completed: false, loaded: evt.loaded, total: evt.total});
+        }
+        var xhr = new XMLHttpRequest();
+        xhr.addEventListener('abort', handleFailure);
+        xhr.addEventListener('error', handleFailure);
+        xhr.addEventListener('load', handleSuccess);
+        if (typeof progress == 'function')
+            xhr.addEventListener('progress', handleProgress);
+        xhr.open('GET', url);
+        xhr.send();
+    });
+}
+
 function Resources(resourcePath) {
     resourcePath = resourcePath || '';
     var self = this;
@@ -86,7 +112,7 @@ function Resources(resourcePath) {
         });
     });
     this.createCache('file', function (url) {
-        return $.get(combinePath(self.resourcePath, url));
+        return httpFetch(combinePath(self.resourcePath, url));
     });
     this.onresourcesloading =
     this.onresourcesloaded = function () {};
